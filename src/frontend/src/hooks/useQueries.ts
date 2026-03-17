@@ -3,13 +3,36 @@ import { ExternalBlob, MediaType } from "../backend";
 import type { MediaEntry } from "../backend";
 import { useActor } from "./useActor";
 
+// Push all media URLs to the service worker so they are pre-cached in background
+function precacheMediaUrls(items: MediaEntry[]) {
+  if (!navigator.serviceWorker?.controller) return;
+  const urls: string[] = [];
+  for (const item of items) {
+    try {
+      const url = item.file.getDirectURL();
+      if (url) urls.push(url);
+    } catch {
+      // skip
+    }
+  }
+  if (urls.length > 0) {
+    navigator.serviceWorker.controller.postMessage({
+      type: "PRECACHE_URLS",
+      urls,
+    });
+  }
+}
+
 export function useListMedia() {
   const { actor, isFetching } = useActor();
   return useQuery<MediaEntry[]>({
     queryKey: ["media"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.listMedia();
+      const items = await actor.listMedia();
+      // Pre-cache all media in background once online
+      precacheMediaUrls(items);
+      return items;
     },
     enabled: !!actor && !isFetching,
   });
@@ -66,7 +89,12 @@ export function useIsAdmin() {
     queryKey: ["isAdmin"],
     queryFn: async () => {
       if (!actor) return false;
-      return actor.isCallerAdmin();
+      try {
+        return await actor.isCallerAdmin();
+      } catch {
+        // If the call fails, treat as non-admin to avoid breaking the UI
+        return false;
+      }
     },
     enabled: !!actor && !isFetching,
   });

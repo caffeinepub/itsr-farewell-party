@@ -29,26 +29,126 @@ const GROUPS = [
   },
 ];
 
-// Floating background orbs data
+const CARD_STYLES = [
+  {
+    background: "oklch(100% 0 0 / 0.85)",
+    border: "1.5px solid oklch(62% 0.18 148 / 0.5)",
+    boxShadow:
+      "0 8px 32px oklch(55% 0.16 148 / 0.25), inset 0 1px 0 oklch(90% 0.1 148 / 0.4)",
+    hoverShadow:
+      "0 14px 50px oklch(50% 0.18 148 / 0.35), 0 0 35px oklch(58% 0.18 148 / 0.2)",
+    hoverBorder: "oklch(55% 0.2 148 / 0.65)",
+  },
+  {
+    background: "oklch(93% 0.06 148 / 0.85)",
+    border: "1.5px solid oklch(55% 0.18 148 / 0.55)",
+    boxShadow:
+      "0 8px 32px oklch(50% 0.18 148 / 0.28), inset 0 1px 0 oklch(85% 0.12 148 / 0.45)",
+    hoverShadow:
+      "0 14px 50px oklch(45% 0.2 148 / 0.38), 0 0 35px oklch(52% 0.2 148 / 0.22)",
+    hoverBorder: "oklch(48% 0.22 148 / 0.7)",
+  },
+  {
+    background: "oklch(100% 0 0 / 0.85)",
+    border: "1.5px solid oklch(62% 0.18 148 / 0.5)",
+    boxShadow:
+      "0 8px 32px oklch(55% 0.16 148 / 0.25), inset 0 1px 0 oklch(90% 0.1 148 / 0.4)",
+    hoverShadow:
+      "0 14px 50px oklch(50% 0.18 148 / 0.35), 0 0 35px oklch(58% 0.18 148 / 0.2)",
+    hoverBorder: "oklch(55% 0.2 148 / 0.65)",
+  },
+];
+
+// Stars for sparkle layer
+const STARS = Array.from({ length: 28 }, (_, i) => ({
+  id: i,
+  left: `${(i * 37 + 5) % 95}%`,
+  top: `${(i * 53 + 8) % 90}%`,
+  size: i % 3 === 0 ? 3 : i % 3 === 1 ? 2 : 1.5,
+  delay: (i * 0.3) % 4,
+  dur: 2 + (i % 3),
+}));
+
+// Orbs: light pastel colors, low opacity
 const ORBS = [
-  { size: 340, x: "8%", y: "12%", opacity: 0.22, delay: 0 },
-  { size: 220, x: "78%", y: "8%", opacity: 0.18, delay: 2 },
-  { size: 180, x: "60%", y: "55%", opacity: 0.14, delay: 4 },
-  { size: 260, x: "15%", y: "68%", opacity: 0.16, delay: 1.5 },
-  { size: 120, x: "88%", y: "75%", opacity: 0.2, delay: 3 },
-  { size: 80, x: "50%", y: "22%", opacity: 0.12, delay: 5 },
+  {
+    size: 420,
+    x: "5%",
+    y: "10%",
+    hue: 148,
+    lum: "75%",
+    chroma: "0.15",
+    opacity: 0.15,
+    delay: 0,
+  },
+  {
+    size: 280,
+    x: "76%",
+    y: "6%",
+    hue: 75,
+    lum: "82%",
+    chroma: "0.12",
+    opacity: 0.18,
+    delay: 2,
+  },
+  {
+    size: 200,
+    x: "58%",
+    y: "52%",
+    hue: 148,
+    lum: "75%",
+    chroma: "0.13",
+    opacity: 0.12,
+    delay: 4,
+  },
+  {
+    size: 320,
+    x: "12%",
+    y: "66%",
+    hue: 155,
+    lum: "78%",
+    chroma: "0.11",
+    opacity: 0.14,
+    delay: 1.5,
+  },
+  {
+    size: 150,
+    x: "86%",
+    y: "72%",
+    hue: 80,
+    lum: "80%",
+    chroma: "0.13",
+    opacity: 0.16,
+    delay: 3,
+  },
+  {
+    size: 100,
+    x: "48%",
+    y: "20%",
+    hue: 148,
+    lum: "76%",
+    chroma: "0.14",
+    opacity: 0.12,
+    delay: 5,
+  },
 ];
 
 function FloatingOrb({
   size,
   x,
   y,
+  hue,
+  lum,
+  chroma,
   opacity,
   delay,
 }: {
   size: number;
   x: string;
   y: string;
+  hue: number;
+  lum: string;
+  chroma: string;
   opacity: number;
   delay: number;
 }) {
@@ -60,17 +160,13 @@ function FloatingOrb({
         height: size,
         left: x,
         top: y,
-        background:
-          "radial-gradient(circle, oklch(65% 0.15 148) 0%, oklch(80% 0.08 148 / 0.3) 60%, transparent 80%)",
+        background: `radial-gradient(circle, oklch(${lum} ${chroma} ${hue}) 0%, oklch(${lum} ${chroma} ${hue} / 0.2) 55%, transparent 80%)`,
         opacity,
-        filter: "blur(40px)",
+        filter: "blur(60px)",
       }}
-      animate={{
-        y: [0, -20, 0],
-        scale: [1, 1.06, 1],
-      }}
+      animate={{ y: [0, -24, 0], scale: [1, 1.07, 1] }}
       transition={{
-        duration: 8 + delay,
+        duration: 9 + delay,
         repeat: Number.POSITIVE_INFINITY,
         ease: "easeInOut",
         delay,
@@ -101,7 +197,7 @@ function FloatingLeaves() {
             y: ["0vh", "110vh"],
             x: ["0px", `${(i % 2 === 0 ? 1 : -1) * 60}px`],
             rotate: [0, 360],
-            opacity: [0, 0.6, 0.6, 0],
+            opacity: [0, 0.4, 0.4, 0],
           }}
           transition={{
             duration: leaf.dur,
@@ -136,14 +232,14 @@ export default function PublicPage() {
     };
     window.addEventListener("resize", resize);
 
-    // Tiny floating particles
-    const particles = Array.from({ length: 55 }, () => ({
+    const particles = Array.from({ length: 80 }, () => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
-      r: Math.random() * 3 + 1,
-      vx: (Math.random() - 0.5) * 0.3,
-      vy: -Math.random() * 0.4 - 0.1,
-      alpha: Math.random() * 0.5 + 0.2,
+      r: Math.random() * 2.5 + 0.8,
+      vx: (Math.random() - 0.5) * 0.35,
+      vy: -Math.random() * 0.5 - 0.15,
+      alpha: Math.random() * 0.3 + 0.15,
+      isGold: Math.random() > 0.7,
     }));
 
     let raf: number;
@@ -152,7 +248,11 @@ export default function PublicPage() {
       for (const p of particles) {
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `oklch(58% 0.14 148 / ${p.alpha})`;
+        if (p.isGold) {
+          ctx.fillStyle = `rgba(180, 140, 40, ${p.alpha * 0.6})`;
+        } else {
+          ctx.fillStyle = `rgba(60, 160, 90, ${p.alpha})`;
+        }
         ctx.fill();
         p.x += p.vx;
         p.y += p.vy;
@@ -175,13 +275,40 @@ export default function PublicPage() {
   return (
     <div
       className="relative min-h-screen overflow-hidden grain-overlay"
-      style={{ background: "oklch(96% 0.018 145)" }}
+      style={{
+        background:
+          "linear-gradient(135deg, oklch(97% 0.012 145) 0%, oklch(94% 0.025 148) 40%, oklch(96% 0.018 155) 100%)",
+      }}
     >
       {/* Canvas particles */}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 pointer-events-none z-0"
       />
+
+      {/* Sparkle star dots */}
+      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+        {STARS.map((star) => (
+          <motion.div
+            key={star.id}
+            className="absolute rounded-full"
+            style={{
+              left: star.left,
+              top: star.top,
+              width: star.size,
+              height: star.size,
+              background: "rgba(60, 130, 80, 0.4)",
+            }}
+            animate={{ opacity: [0.1, 0.5, 0.1] }}
+            transition={{
+              duration: star.dur,
+              repeat: Number.POSITIVE_INFINITY,
+              ease: "easeInOut",
+              delay: star.delay,
+            }}
+          />
+        ))}
+      </div>
 
       {/* Background orbs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
@@ -199,18 +326,23 @@ export default function PublicPage() {
       {/* Top bar */}
       <header className="relative z-20 flex items-center justify-between px-6 py-5">
         <div
-          className="font-display font-bold text-lg"
-          style={{ color: "oklch(42% 0.13 148)" }}
+          className="font-display font-bold text-xl tracking-wider"
+          style={{
+            color: "oklch(55% 0.16 75)",
+            textShadow:
+              "0 0 16px oklch(70% 0.15 75 / 0.35), 0 1px 6px oklch(65% 0.14 75 / 0.2)",
+          }}
         >
           ITSR
         </div>
         <Link
           to="/admin"
           data-ocid="nav.link"
-          className="font-body text-sm px-4 py-1.5 rounded-full border transition-all"
+          className="font-body text-sm px-4 py-1.5 rounded-full transition-all hover:scale-105"
           style={{
             color: "oklch(42% 0.13 148)",
-            borderColor: "oklch(75% 0.1 148)",
+            background: "oklch(95% 0.02 148 / 0.8)",
+            border: "1px solid oklch(60% 0.12 148 / 0.4)",
           }}
         >
           Admin
@@ -224,13 +356,21 @@ export default function PublicPage() {
           initial={{ opacity: 0, y: -30, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-          className="glass-card rounded-2xl px-10 py-5 mb-5 shadow-lg"
+          className="rounded-2xl px-10 py-5 mb-5 shadow-lg"
+          style={{
+            background: "oklch(99% 0.006 145 / 0.8)",
+            border: "1px solid oklch(70% 0.12 75 / 0.4)",
+            backdropFilter: "blur(20px)",
+            boxShadow:
+              "0 8px 40px oklch(70% 0.15 75 / 0.25), inset 0 1px 0 oklch(80% 0.15 75 / 0.2)",
+          }}
         >
           <h1
             className="font-display text-5xl md:text-6xl font-bold tracking-tight text-center"
             style={{
-              color: "oklch(72% 0.17 75)",
-              textShadow: "0 2px 20px oklch(75% 0.17 75 / 0.3)",
+              color: "oklch(62% 0.18 75)",
+              textShadow:
+                "0 0 30px oklch(70% 0.17 75 / 0.5), 0 2px 14px oklch(65% 0.16 75 / 0.3)",
             }}
           >
             #HOME
@@ -242,18 +382,24 @@ export default function PublicPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
-          className="glass-card rounded-xl px-8 py-4 mb-14 max-w-xl text-center shadow-md"
+          className="rounded-xl px-8 py-4 mb-14 max-w-xl text-center shadow-md"
+          style={{
+            background: "oklch(98% 0.01 148 / 0.75)",
+            border: "1px solid oklch(72% 0.1 148 / 0.3)",
+            backdropFilter: "blur(16px)",
+          }}
         >
           <p
             className="font-body text-base md:text-lg leading-relaxed italic"
-            style={{ color: "oklch(32% 0.06 155)" }}
+            style={{ color: "oklch(35% 0.06 155)" }}
           >
             "It was never the college, It is the people who made it feel like{" "}
             <span
               style={{
-                color: "oklch(72% 0.17 75)",
+                color: "oklch(62% 0.18 75)",
                 fontStyle: "normal",
                 fontWeight: 700,
+                textShadow: "0 0 10px oklch(70% 0.16 75 / 0.4)",
               }}
             >
               HOME
@@ -264,82 +410,103 @@ export default function PublicPage() {
 
         {/* Group cards */}
         <div className="flex flex-col sm:flex-row gap-5 md:gap-8 items-center justify-center w-full max-w-3xl">
-          {GROUPS.map((group) => (
-            <motion.div
-              key={group.id}
-              initial={{ opacity: 0, y: 40, scale: 0.92 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{
-                duration: 0.8,
-                delay: group.delay,
-                ease: [0.22, 1, 0.36, 1],
-              }}
-              className="w-full sm:w-56"
-              style={{
-                animation: "float-slow 7s ease-in-out infinite",
-                animationDelay: group.floatDelay,
-              }}
-            >
-              <Link
-                to="/group/$groupId"
-                params={{ groupId: group.id }}
-                data-ocid={`group.${group.id}.button`}
-                className="block"
+          {GROUPS.map((group, i) => {
+            const cardStyle = CARD_STYLES[i];
+            return (
+              <motion.div
+                key={group.id}
+                initial={{ opacity: 0, y: 40, scale: 0.92 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{
+                  duration: 0.8,
+                  delay: group.delay,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+                className="w-full sm:w-56"
+                style={{
+                  animation: "float-slow 7s ease-in-out infinite",
+                  animationDelay: group.floatDelay,
+                }}
               >
-                <motion.div
-                  whileHover={{ scale: 1.06, y: -6 }}
-                  whileTap={{ scale: 0.97 }}
-                  transition={{ type: "spring", stiffness: 320, damping: 22 }}
-                  className="glass-card-green rounded-2xl p-8 text-center cursor-pointer shadow-lg hover:shadow-xl transition-shadow"
-                  style={{
-                    boxShadow:
-                      "0 8px 32px oklch(52% 0.13 148 / 0.18), 0 2px 8px oklch(52% 0.13 148 / 0.1)",
-                  }}
+                <Link
+                  to="/group/$groupId"
+                  params={{ groupId: group.id }}
+                  data-ocid={`group.${group.id}.button`}
+                  className="block"
                 >
-                  <div className="text-4xl mb-3">{group.emoji}</div>
-                  <h2
-                    className="font-display text-2xl font-bold mb-1"
-                    style={{ color: "oklch(30% 0.1 155)" }}
+                  <motion.div
+                    whileHover={{ scale: 1.07, y: -8 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ type: "spring", stiffness: 320, damping: 22 }}
+                    className="rounded-2xl p-8 text-center cursor-pointer transition-all"
+                    style={{
+                      background: cardStyle.background,
+                      border: cardStyle.border,
+                      backdropFilter: "blur(20px)",
+                      boxShadow: cardStyle.boxShadow,
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.boxShadow =
+                        cardStyle.hoverShadow;
+                      (e.currentTarget as HTMLElement).style.borderColor =
+                        cardStyle.hoverBorder;
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.boxShadow =
+                        cardStyle.boxShadow;
+                      (e.currentTarget as HTMLElement).style.borderColor = "";
+                      (e.currentTarget as HTMLElement).style.border =
+                        cardStyle.border;
+                    }}
                   >
-                    {group.label}
-                  </h2>
-                  <p
-                    className="font-body text-xs tracking-wider uppercase"
-                    style={{ color: "oklch(55% 0.08 148)" }}
-                  >
-                    {group.desc}
-                  </p>
-                  <div
-                    className="mt-4 mx-auto w-10 h-0.5 rounded-full"
-                    style={{ background: "oklch(65% 0.13 148 / 0.5)" }}
-                  />
-                  <p
-                    className="mt-3 font-body text-xs"
-                    style={{ color: "oklch(52% 0.1 148)" }}
-                  >
-                    View Gallery →
-                  </p>
-                </motion.div>
-              </Link>
-            </motion.div>
-          ))}
+                    <div className="text-4xl mb-3">{group.emoji}</div>
+                    <h2
+                      className="font-display text-2xl font-bold mb-1"
+                      style={{ color: "oklch(28% 0.07 155)" }}
+                    >
+                      {group.label}
+                    </h2>
+                    <p
+                      className="font-body text-xs tracking-wider uppercase"
+                      style={{ color: "oklch(48% 0.12 148)" }}
+                    >
+                      {group.desc}
+                    </p>
+                    <div
+                      className="mt-4 mx-auto w-10 h-0.5 rounded-full"
+                      style={{
+                        background:
+                          "linear-gradient(90deg, transparent, oklch(55% 0.16 148 / 0.5), transparent)",
+                      }}
+                    />
+                    <p
+                      className="mt-3 font-body text-xs"
+                      style={{ color: "oklch(52% 0.14 148)" }}
+                    >
+                      View Gallery →
+                    </p>
+                  </motion.div>
+                </Link>
+              </motion.div>
+            );
+          })}
         </div>
       </main>
 
       {/* Footer */}
       <footer
         className="relative z-10 py-6 text-center border-t"
-        style={{ borderColor: "oklch(85% 0.04 145)" }}
+        style={{ borderColor: "oklch(75% 0.08 148 / 0.4)" }}
       >
         <p
           className="font-body text-xs mb-1 font-medium tracking-wide"
-          style={{ color: "oklch(48% 0.1 148)" }}
+          style={{ color: "oklch(52% 0.1 148)" }}
         >
           powered by ksu union itsr 2k25-26
         </p>
         <p
           className="font-body text-sm"
-          style={{ color: "oklch(58% 0.06 148)" }}
+          style={{ color: "oklch(52% 0.1 148)" }}
         >
           © {new Date().getFullYear()} ITSR Farewell ·{" "}
           <a
@@ -347,6 +514,7 @@ export default function PublicPage() {
             target="_blank"
             rel="noopener noreferrer"
             className="hover:underline"
+            style={{ color: "oklch(52% 0.14 148)" }}
           >
             Built with ♥ using caffeine.ai
           </a>

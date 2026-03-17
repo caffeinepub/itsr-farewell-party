@@ -3,7 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Camera, Film, Play, Volume2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MediaType } from "../backend";
 import type { MediaEntry } from "../backend";
 import { useListMedia } from "../hooks/useQueries";
@@ -19,6 +19,8 @@ const GROUP_META: Record<
 
 const SKELETON_KEYS = ["s1", "s2", "s3", "s4", "s5", "s6"];
 
+const SPINNER_CSS = "@keyframes spin { to { transform: rotate(360deg); } }";
+
 // ─── Fullscreen Intro Video ───────────────────────────────────────────────────
 
 function IntroVideo({
@@ -28,27 +30,64 @@ function IntroVideo({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [fading, setFading] = useState(false);
   const [waitingForTap, setWaitingForTap] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [isVideoLoading, setIsVideoLoading] = useState(true);
 
-  const handleEnd = () => {
-    setFading(true);
-    setTimeout(onDone, 900);
-  };
+  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const fadingRef = useRef(false);
 
-  const handleSkip = () => {
+  const triggerSkip = useCallback(() => {
+    if (fadingRef.current) return;
+    fadingRef.current = true;
     if (videoRef.current) videoRef.current.pause();
     setFading(true);
     setTimeout(onDone, 900);
-  };
+  }, [onDone]);
 
-  // Auto-play with sound
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid) return;
+
+    initialLoadTimerRef.current = setTimeout(triggerSkip, 15000);
+
     vid.muted = false;
     vid.play().catch(() => {
       setWaitingForTap(true);
     });
-  }, []);
+
+    return () => {
+      if (initialLoadTimerRef.current)
+        clearTimeout(initialLoadTimerRef.current);
+      if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
+    };
+  }, [triggerSkip]);
+
+  const handleEnd = () => triggerSkip();
+
+  const handleCanPlay = () => {
+    setIsVideoLoading(false);
+    if (initialLoadTimerRef.current) {
+      clearTimeout(initialLoadTimerRef.current);
+      initialLoadTimerRef.current = null;
+    }
+  };
+
+  const handleWaiting = () => {
+    setIsBuffering(true);
+    if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
+    stallTimerRef.current = setTimeout(triggerSkip, 12000);
+  };
+
+  const handlePlaying = () => {
+    setIsBuffering(false);
+    if (stallTimerRef.current) {
+      clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
+  };
 
   const handleTapToPlay = () => {
     const vid = videoRef.current;
@@ -65,6 +104,8 @@ function IntroVideo({
       animate={{ opacity: fading ? 0 : 1, y: fading ? "100vh" : 0 }}
       transition={{ duration: 0.9, ease: "easeInOut" }}
     >
+      <style>{SPINNER_CSS}</style>
+
       <div
         className="relative w-full"
         style={{ aspectRatio: "16/9", maxHeight: "100vh" }}
@@ -75,13 +116,57 @@ function IntroVideo({
           src={video.file.getDirectURL()}
           onEnded={handleEnd}
           onError={handleEnd}
+          onCanPlay={handleCanPlay}
+          onWaiting={handleWaiting}
+          onStalled={handleWaiting}
+          onPlaying={handlePlaying}
           autoPlay
           playsInline
+          preload="auto"
           className="w-full h-full object-contain bg-black"
           style={{ display: "block" }}
         />
 
-        {/* Tap-to-play overlay when autoplay fails */}
+        {isVideoLoading && (
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center gap-4"
+            style={{ background: "rgba(0,0,0,0.82)" }}
+          >
+            <div
+              className="w-16 h-16 rounded-full border-4"
+              style={{
+                borderColor: "rgba(255,255,255,0.15)",
+                borderTopColor: "rgba(255,255,255,0.85)",
+                animation: "spin 1s linear infinite",
+              }}
+            />
+            <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "0.85rem" }}>
+              Loading video…
+            </p>
+          </div>
+        )}
+
+        {!isVideoLoading && isBuffering && (
+          <div
+            className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full"
+            style={{ background: "rgba(0,0,0,0.65)" }}
+          >
+            <div
+              className="w-4 h-4 rounded-full border-2"
+              style={{
+                borderColor: "rgba(255,255,255,0.25)",
+                borderTopColor: "white",
+                animation: "spin 0.8s linear infinite",
+              }}
+            />
+            <span
+              style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.75rem" }}
+            >
+              Buffering…
+            </span>
+          </div>
+        )}
+
         {waitingForTap && (
           <button
             type="button"
@@ -99,25 +184,31 @@ function IntroVideo({
             >
               <Play className="w-8 h-8 text-white ml-1" fill="currentColor" />
             </div>
-            <div className="flex items-center gap-2 text-white/80">
+            <div
+              className="flex items-center gap-2"
+              style={{ color: "rgba(255,255,255,0.8)" }}
+            >
               <Volume2 className="w-4 h-4" />
-              <span className="text-sm font-body">Tap to play with sound</span>
+              <span style={{ fontSize: "0.875rem" }}>
+                Tap to play with sound
+              </span>
             </div>
           </button>
         )}
 
-        {/* Skip button — only when not waiting for tap */}
-        {!waitingForTap && (
-          <button
-            type="button"
-            data-ocid="intro.skip_button"
-            onClick={handleSkip}
-            className="absolute bottom-8 right-6 font-body text-sm px-4 py-2 rounded-full text-white/80 hover:text-white transition-colors"
-            style={{ background: "rgba(0,0,0,0.45)" }}
-          >
-            Skip ›
-          </button>
-        )}
+        <button
+          type="button"
+          data-ocid="intro.skip_button"
+          onClick={triggerSkip}
+          className="absolute bottom-8 right-6 text-sm px-4 py-2 rounded-full transition-colors"
+          style={{
+            background: "rgba(0,0,0,0.5)",
+            color: "rgba(255,255,255,0.75)",
+            border: "1px solid rgba(255,255,255,0.2)",
+          }}
+        >
+          Skip ›
+        </button>
       </div>
     </motion.div>
   );
@@ -137,7 +228,7 @@ function HalfScreenViewer({
         {/* Backdrop */}
         <motion.div
           className="absolute inset-0"
-          style={{ background: "rgba(0,0,0,0.6)" }}
+          style={{ background: "rgba(0,0,0,0.72)" }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -150,8 +241,9 @@ function HalfScreenViewer({
           className="relative w-full flex flex-col rounded-t-2xl overflow-hidden"
           style={{
             height: "50vh",
-            background: "oklch(12% 0.04 145)",
-            borderTop: "1px solid oklch(40% 0.08 148 / 0.5)",
+            background: "oklch(100% 0 0)",
+            borderTop: "1.5px solid oklch(72% 0.1 148 / 0.3)",
+            boxShadow: "0 -8px 60px oklch(40% 0.15 148 / 0.15)",
           }}
           initial={{ y: "100%" }}
           animate={{ y: 0 }}
@@ -161,17 +253,28 @@ function HalfScreenViewer({
           {/* Header bar */}
           <div
             className="flex items-center justify-between px-4 py-3 shrink-0"
-            style={{ borderBottom: "1px solid oklch(30% 0.06 145 / 0.5)" }}
+            style={{ borderBottom: "1px solid oklch(75% 0.08 148 / 0.5)" }}
           >
-            <p className="font-body text-sm font-medium text-white/90 truncate pr-4">
+            <p
+              style={{
+                color: "oklch(28% 0.07 155)",
+                fontSize: "0.875rem",
+                fontWeight: 500,
+              }}
+              className="truncate pr-4"
+            >
               {media.title}
             </p>
             <button
               type="button"
               data-ocid="viewer.close_button"
               onClick={onClose}
-              className="shrink-0 rounded-full p-1.5 text-white/70 hover:text-white transition-colors"
-              style={{ background: "oklch(25% 0.06 145)" }}
+              className="shrink-0 rounded-full p-1.5 transition-colors"
+              style={{
+                background: "oklch(90% 0.04 148 / 0.8)",
+                color: "oklch(35% 0.1 148)",
+                border: "1px solid oklch(65% 0.1 148 / 0.4)",
+              }}
             >
               <X className="w-4 h-4" />
             </button>
@@ -211,26 +314,27 @@ interface FloatingItemProps {
 
 function FloatingItem({ media, index, onClick }: FloatingItemProps) {
   const isVideo = media.mediaType === MediaType.video;
-  // Deterministic pseudo-random positions from index
   const seed = index * 137 + 42;
-  const left = ((seed * 31) % 80) + 5; // 5–85 vw
-  const top = index * 220 + ((seed * 17) % 120); // spread down the tall container
-  const size = 150 + ((seed * 7) % 60); // 150–210px
-  const duration = 3 + ((seed * 3) % 3.5); // 3–6.5s
-  const delay = (seed * 0.13) % 2; // 0–2s
-  const rotateRange = ((seed % 7) - 3) * 2; // -6 to +6 deg
+  const left = ((seed * 31) % 80) + 5;
+  const top = index * 220 + ((seed * 17) % 120);
+  const size = 150 + ((seed * 7) % 60);
+  const duration = 3 + ((seed * 3) % 3.5);
+  const delay = (seed * 0.13) % 2;
+  const rotateRange = ((seed % 7) - 3) * 2;
 
   return (
     <motion.div
       data-ocid={`media.item.${index + 1}`}
       onClick={onClick}
-      className="absolute cursor-pointer rounded-2xl overflow-hidden shadow-xl"
+      className="absolute cursor-pointer rounded-2xl overflow-hidden"
       style={{
         left: `${left}%`,
         top: `${top}px`,
         width: `${size}px`,
         height: `${size}px`,
-        border: "2px solid oklch(75% 0.12 148 / 0.4)",
+        border: "1.5px solid oklch(72% 0.14 148 / 0.4)",
+        boxShadow:
+          "0 4px 24px oklch(60% 0.1 148 / 0.15), 0 0 40px oklch(65% 0.12 148 / 0.08)",
       }}
       initial={{ opacity: 0, scale: 0.6, y: 30 }}
       animate={{
@@ -240,28 +344,32 @@ function FloatingItem({ media, index, onClick }: FloatingItemProps) {
         rotate: [0, rotateRange, 0],
       }}
       transition={{
-        opacity: { duration: 0.5, delay: delay },
-        scale: { duration: 0.5, delay: delay },
+        opacity: { duration: 0.5, delay },
+        scale: { duration: 0.5, delay },
         y: {
-          duration: duration,
-          delay: delay,
+          duration,
+          delay,
           repeat: Number.POSITIVE_INFINITY,
           repeatType: "reverse",
           ease: "easeInOut",
         },
         rotate: {
           duration: duration * 1.3,
-          delay: delay,
+          delay,
           repeat: Number.POSITIVE_INFINITY,
           repeatType: "reverse",
           ease: "easeInOut",
         },
       }}
-      whileHover={{ scale: 1.1, zIndex: 10 }}
+      whileHover={{
+        scale: 1.12,
+        zIndex: 10,
+        boxShadow:
+          "0 8px 40px oklch(62% 0.14 148 / 0.3), 0 0 60px oklch(65% 0.12 148 / 0.15)",
+      }}
     >
       {isVideo ? (
         <>
-          {/* biome-ignore lint/a11y/useMediaCaption: thumbnail preview */}
           <video
             src={media.file.getDirectURL()}
             className="w-full h-full object-cover"
@@ -270,11 +378,14 @@ function FloatingItem({ media, index, onClick }: FloatingItemProps) {
           />
           <div
             className="absolute inset-0 flex items-center justify-center"
-            style={{ background: "rgba(0,0,0,0.35)" }}
+            style={{ background: "rgba(0,0,0,0.38)" }}
           >
             <div
               className="w-10 h-10 rounded-full flex items-center justify-center"
-              style={{ background: "oklch(65% 0.15 148 / 0.9)" }}
+              style={{
+                background: "oklch(55% 0.2 148 / 0.9)",
+                boxShadow: "0 0 20px oklch(60% 0.22 148 / 0.6)",
+              }}
             >
               <Play className="w-4 h-4 text-white ml-0.5" fill="currentColor" />
             </div>
@@ -296,7 +407,6 @@ function FloatingGallery({ items }: { items: MediaEntry[] }) {
 
   if (items.length === 0) return null;
 
-  // Container height: enough to spread all items with 220px per row
   const containerHeight = Math.max(items.length * 220 + 400, 800);
 
   return (
@@ -340,8 +450,12 @@ function PhotoLightbox({
           type="button"
           onClick={onClose}
           data-ocid="photo.close_button"
-          className="absolute top-4 right-4 z-50 text-white rounded-full p-2 transition-colors"
-          style={{ background: "oklch(20% 0.04 145 / 0.6)" }}
+          className="absolute top-4 right-4 z-50 rounded-full p-2 transition-colors"
+          style={{
+            background: "oklch(20% 0.06 148 / 0.85)",
+            color: "white",
+            border: "1px solid oklch(40% 0.1 148 / 0.4)",
+          }}
         >
           <X className="w-5 h-5" />
         </button>
@@ -352,8 +466,11 @@ function PhotoLightbox({
           style={{ maxHeight: "85vh" }}
         />
         <p
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white font-body text-sm px-4 py-1.5 rounded-full"
-          style={{ background: "oklch(20% 0.04 145 / 0.6)" }}
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm px-4 py-1.5 rounded-full"
+          style={{
+            background: "oklch(20% 0.06 148 / 0.85)",
+            color: "rgba(255,255,255,0.9)",
+          }}
         >
           {media.title}
         </p>
@@ -372,8 +489,8 @@ function VideoModal({
         data-ocid="video.dialog"
         className="max-w-4xl w-full p-4 border"
         style={{
-          background: "oklch(98% 0.008 145)",
-          borderColor: "oklch(85% 0.05 145)",
+          background: "oklch(100% 0 0)",
+          borderColor: "oklch(78% 0.08 148 / 0.4)",
         }}
       >
         <button
@@ -381,13 +498,17 @@ function VideoModal({
           onClick={onClose}
           data-ocid="video.close_button"
           className="absolute top-4 right-4 z-50 rounded-full p-2 transition-colors"
-          style={{ background: "oklch(20% 0.04 145 / 0.5)", color: "white" }}
+          style={{
+            background: "oklch(90% 0.04 148 / 0.8)",
+            color: "oklch(35% 0.1 148)",
+            border: "1px solid oklch(65% 0.1 148 / 0.4)",
+          }}
         >
           <X className="w-5 h-5" />
         </button>
         <p
           className="font-display font-semibold mb-3"
-          style={{ color: "oklch(30% 0.08 148)" }}
+          style={{ color: "oklch(42% 0.13 148)" }}
         >
           {media.title}
         </p>
@@ -420,9 +541,12 @@ function PhotoGrid({ photos }: { photos: MediaEntry[] }) {
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.4, delay: (i % 8) * 0.05 }}
-            whileHover={{ scale: 1.03 }}
+            whileHover={{ scale: 1.04 }}
             className="relative group aspect-square overflow-hidden rounded-xl cursor-pointer"
-            style={{ border: "1.5px solid oklch(85% 0.06 148 / 0.5)" }}
+            style={{
+              border: "1.5px solid oklch(72% 0.12 148 / 0.3)",
+              boxShadow: "0 2px 16px oklch(50% 0.08 148 / 0.15)",
+            }}
             onClick={() => setSelected(photo)}
           >
             <img
@@ -434,10 +558,13 @@ function PhotoGrid({ photos }: { photos: MediaEntry[] }) {
               className="absolute inset-0 flex items-end p-3 opacity-0 group-hover:opacity-100 transition-opacity"
               style={{
                 background:
-                  "linear-gradient(to top, oklch(30% 0.08 148 / 0.7), transparent)",
+                  "linear-gradient(to top, oklch(20% 0.08 148 / 0.75), transparent)",
               }}
             >
-              <p className="text-white text-xs font-body truncate">
+              <p
+                style={{ color: "rgba(255,255,255,0.9)", fontSize: "0.75rem" }}
+                className="truncate"
+              >
                 {photo.title}
               </p>
             </div>
@@ -471,10 +598,12 @@ function VideoGrid({ videos }: { videos: MediaEntry[] }) {
             transition={{ duration: 0.4, delay: (i % 6) * 0.07 }}
             whileHover={{ scale: 1.03, y: -4 }}
             className="relative group aspect-video overflow-hidden rounded-xl cursor-pointer"
-            style={{ border: "1.5px solid oklch(85% 0.06 148 / 0.5)" }}
+            style={{
+              border: "1.5px solid oklch(72% 0.12 148 / 0.3)",
+              boxShadow: "0 2px 20px oklch(50% 0.1 148 / 0.15)",
+            }}
             onClick={() => setSelected(video)}
           >
-            {/* biome-ignore lint/a11y/useMediaCaption: user-uploaded party videos */}
             <video
               src={video.file.getDirectURL()}
               className="w-full h-full object-cover"
@@ -482,18 +611,28 @@ function VideoGrid({ videos }: { videos: MediaEntry[] }) {
             />
             <div
               className="absolute inset-0 flex items-center justify-center transition-colors"
-              style={{ background: "oklch(20% 0.06 148 / 0.3)" }}
+              style={{ background: "oklch(10% 0.04 148 / 0.25)" }}
             >
               <motion.div
                 whileHover={{ scale: 1.15 }}
                 className="w-14 h-14 rounded-full flex items-center justify-center shadow-lg"
-                style={{ background: "oklch(65% 0.13 148 / 0.92)" }}
+                style={{
+                  background: "oklch(55% 0.2 148 / 0.92)",
+                  boxShadow: "0 0 24px oklch(60% 0.22 148 / 0.55)",
+                }}
               >
                 <Play className="w-6 h-6 text-white ml-1" fill="currentColor" />
               </motion.div>
             </div>
             <div className="absolute bottom-3 left-3 right-3">
-              <p className="text-white text-sm font-body font-medium truncate drop-shadow">
+              <p
+                style={{
+                  color: "rgba(255,255,255,0.92)",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                }}
+                className="truncate drop-shadow"
+              >
                 {video.title}
               </p>
             </div>
@@ -513,7 +652,6 @@ function VideoGrid({ videos }: { videos: MediaEntry[] }) {
 
 export default function GroupPage() {
   const { groupId } = useParams({ from: "/group/$groupId" });
-  // Both 2nd PG and 3rd B.A get the floating gallery + intro video treatment
   const isFloatingGroup = groupId === "2nd_pg" || groupId === "3rd_ba";
 
   const meta = GROUP_META[groupId] ?? {
@@ -528,33 +666,46 @@ export default function GroupPage() {
   const videos = groupMedia.filter((m) => m.mediaType === MediaType.video);
   const hasMedia = photos.length > 0 || videos.length > 0;
 
-  // For floating groups, merge photos + videos into a single floating list
   const allGroupItems = [...photos, ...videos];
 
-  // Intro video: show for floating groups when a video exists and URL is valid
   const introVideo = isFloatingGroup && videos.length > 0 ? videos[0] : null;
   const introVideoUrl = introVideo?.file?.getDirectURL?.() ?? "";
-  const [introDone, setIntroDone] = useState(false);
+  const [introDoneGroups, setIntroDoneGroups] = useState<Set<string>>(
+    new Set(),
+  );
+  const introDone = introDoneGroups.has(groupId);
+  const markIntroDone = () =>
+    setIntroDoneGroups((prev) => new Set([...prev, groupId]));
   const showIntro = !!introVideo && !!introVideoUrl && !introDone && !isLoading;
 
   return (
     <div
       className="min-h-screen grain-overlay"
-      style={{ background: "oklch(96% 0.018 145)" }}
+      style={{
+        background:
+          "linear-gradient(160deg, oklch(100% 0 0) 0%, oklch(98% 0.01 148) 50%, oklch(99% 0.008 152) 100%)",
+      }}
     >
       {/* Fullscreen intro for floating groups */}
-      {showIntro && (
-        <IntroVideo video={introVideo} onDone={() => setIntroDone(true)} />
-      )}
+      {showIntro && <IntroVideo video={introVideo} onDone={markIntroDone} />}
 
-      {/* Background orb */}
+      {/* Background orbs */}
       <div
-        className="fixed top-0 left-0 w-96 h-96 rounded-full pointer-events-none"
+        className="fixed top-0 left-0 w-[500px] h-[500px] rounded-full pointer-events-none"
         style={{
           background:
-            "radial-gradient(circle, oklch(65% 0.13 148 / 0.15) 0%, transparent 70%)",
-          filter: "blur(60px)",
+            "radial-gradient(circle, oklch(80% 0.12 148 / 0.08) 0%, transparent 70%)",
+          filter: "blur(70px)",
           transform: "translate(-30%, -30%)",
+        }}
+      />
+      <div
+        className="fixed bottom-0 right-0 w-96 h-96 rounded-full pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(circle, oklch(85% 0.1 75 / 0.06) 0%, transparent 70%)",
+          filter: "blur(60px)",
+          transform: "translate(30%, 30%)",
         }}
       />
 
@@ -562,18 +713,19 @@ export default function GroupPage() {
       <header
         className="sticky top-0 z-40 backdrop-blur-md"
         style={{
-          borderBottom: "1px solid oklch(85% 0.04 145)",
-          background: "oklch(97% 0.012 145 / 0.85)",
+          borderBottom: "1px solid oklch(70% 0.08 148 / 0.25)",
+          background: "oklch(100% 0 0 / 0.92)",
         }}
       >
         <div className="max-w-7xl mx-auto px-5 py-4 flex items-center gap-4">
           <Link
             to="/"
             data-ocid="group.back.button"
-            className="flex items-center gap-2 font-body text-sm px-3 py-1.5 rounded-full transition-all hover:scale-105"
+            className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-full transition-all hover:scale-105"
             style={{
-              color: "oklch(42% 0.12 148)",
-              background: "oklch(88% 0.06 145 / 0.6)",
+              color: "oklch(42% 0.13 148)",
+              background: "oklch(95% 0.02 148 / 0.8)",
+              border: "1px solid oklch(60% 0.12 148 / 0.4)",
             }}
           >
             <ArrowLeft className="w-4 h-4" />
@@ -584,13 +736,13 @@ export default function GroupPage() {
             <div>
               <h1
                 className="font-display font-bold text-lg leading-none"
-                style={{ color: "oklch(28% 0.1 155)" }}
+                style={{ color: "oklch(28% 0.07 155)" }}
               >
                 {meta.label}
               </h1>
               <p
                 className="font-body text-xs"
-                style={{ color: "oklch(55% 0.07 148)" }}
+                style={{ color: "oklch(48% 0.12 148)" }}
               >
                 {meta.desc}
               </p>
@@ -604,7 +756,11 @@ export default function GroupPage() {
           <div data-ocid="group.loading_state">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {SKELETON_KEYS.map((k) => (
-                <Skeleton key={k} className="aspect-square rounded-xl" />
+                <Skeleton
+                  key={k}
+                  className="aspect-square rounded-xl"
+                  style={{ background: "oklch(90% 0.04 148 / 0.6)" }}
+                />
               ))}
             </div>
           </div>
@@ -619,19 +775,18 @@ export default function GroupPage() {
             <div className="text-6xl mb-6">{meta.emoji}</div>
             <h2
               className="font-display text-2xl font-semibold mb-2"
-              style={{ color: "oklch(35% 0.1 155)" }}
+              style={{ color: "oklch(35% 0.1 148)" }}
             >
               No memories yet
             </h2>
             <p
               className="font-body text-sm"
-              style={{ color: "oklch(58% 0.07 148)" }}
+              style={{ color: "oklch(48% 0.1 148)" }}
             >
               Photos and videos for {meta.label} will appear here soon!
             </p>
           </motion.div>
         ) : isFloatingGroup ? (
-          /* ── Floating groups (2nd PG & 3rd B.A): Floating gallery ── */
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -641,15 +796,16 @@ export default function GroupPage() {
               <span className="text-2xl">✨</span>
               <h2
                 className="font-display text-2xl font-semibold"
-                style={{ color: "oklch(28% 0.1 155)" }}
+                style={{ color: "oklch(28% 0.07 155)" }}
               >
                 Memories
               </h2>
               <span
                 className="font-body text-xs px-2 py-0.5 rounded-full"
                 style={{
-                  background: "oklch(85% 0.08 148 / 0.5)",
-                  color: "oklch(40% 0.1 148)",
+                  background: "oklch(92% 0.05 148 / 0.8)",
+                  color: "oklch(42% 0.14 148)",
+                  border: "1px solid oklch(62% 0.12 148 / 0.4)",
                 }}
               >
                 {allGroupItems.length}
@@ -658,7 +814,6 @@ export default function GroupPage() {
             <FloatingGallery items={allGroupItems} />
           </motion.div>
         ) : (
-          /* ── Other groups (3rd B.Com): Standard grid layout ── */
           <div className="space-y-14">
             {photos.length > 0 && (
               <motion.section
@@ -669,19 +824,20 @@ export default function GroupPage() {
                 <div className="flex items-center gap-3 mb-6">
                   <Camera
                     className="w-5 h-5"
-                    style={{ color: "oklch(52% 0.13 148)" }}
+                    style={{ color: "oklch(52% 0.2 148)" }}
                   />
                   <h2
                     className="font-display text-2xl font-semibold"
-                    style={{ color: "oklch(28% 0.1 155)" }}
+                    style={{ color: "oklch(28% 0.07 155)" }}
                   >
                     Photos
                   </h2>
                   <span
                     className="font-body text-xs px-2 py-0.5 rounded-full"
                     style={{
-                      background: "oklch(85% 0.08 148 / 0.5)",
-                      color: "oklch(40% 0.1 148)",
+                      background: "oklch(92% 0.05 148 / 0.8)",
+                      color: "oklch(42% 0.14 148)",
+                      border: "1px solid oklch(62% 0.12 148 / 0.4)",
                     }}
                   >
                     {photos.length}
@@ -700,19 +856,20 @@ export default function GroupPage() {
                 <div className="flex items-center gap-3 mb-6">
                   <Film
                     className="w-5 h-5"
-                    style={{ color: "oklch(52% 0.13 148)" }}
+                    style={{ color: "oklch(52% 0.2 148)" }}
                   />
                   <h2
                     className="font-display text-2xl font-semibold"
-                    style={{ color: "oklch(28% 0.1 155)" }}
+                    style={{ color: "oklch(28% 0.07 155)" }}
                   >
                     Videos
                   </h2>
                   <span
                     className="font-body text-xs px-2 py-0.5 rounded-full"
                     style={{
-                      background: "oklch(85% 0.08 148 / 0.5)",
-                      color: "oklch(40% 0.1 148)",
+                      background: "oklch(92% 0.05 148 / 0.8)",
+                      color: "oklch(42% 0.14 148)",
+                      border: "1px solid oklch(62% 0.12 148 / 0.4)",
                     }}
                   >
                     {videos.length}
