@@ -23,7 +23,16 @@ export default function AdminLogin() {
   useEffect(() => {
     const hasIdentity =
       (isLoginSuccess || !!identity) && !actorFetching && actor;
-    if (hasIdentity && !claimAttempted.current) {
+    if (!hasIdentity || claimAttempted.current || checkingAdmin) return;
+
+    // Already admin from a previous session — go straight to dashboard
+    if (isAdmin === true) {
+      navigate({ to: "/admin/dashboard" });
+      return;
+    }
+
+    // Not admin yet — attempt to claim the first-admin slot
+    if (isAdmin === false) {
       claimAttempted.current = true;
       setClaiming(true);
       actor
@@ -34,8 +43,18 @@ export default function AdminLogin() {
           setClaiming(false);
         });
     }
-  }, [isLoginSuccess, identity, actor, actorFetching, queryClient]);
+  }, [
+    isLoginSuccess,
+    identity,
+    actor,
+    actorFetching,
+    isAdmin,
+    checkingAdmin,
+    queryClient,
+    navigate,
+  ]);
 
+  // After a claim attempt is done and isAdmin query has settled, decide outcome
   useEffect(() => {
     if (claimAttempted.current && !claiming && !checkingAdmin) {
       if (isAdmin) {

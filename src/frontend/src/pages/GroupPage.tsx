@@ -1,9 +1,9 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Camera, Film, Play, X } from "lucide-react";
+import { ArrowLeft, Camera, Film, Play, Volume2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MediaType } from "../backend";
 import type { MediaEntry } from "../backend";
 import { useListMedia } from "../hooks/useQueries";
@@ -18,6 +18,110 @@ const GROUP_META: Record<
 };
 
 const SKELETON_KEYS = ["s1", "s2", "s3", "s4", "s5", "s6"];
+
+// ─── Fullscreen Intro Video ───────────────────────────────────────────────────
+
+function IntroVideo({
+  video,
+  onDone,
+}: { video: MediaEntry; onDone: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [fading, setFading] = useState(false);
+  const [waitingForTap, setWaitingForTap] = useState(false);
+
+  const handleEnd = () => {
+    setFading(true);
+    setTimeout(onDone, 900);
+  };
+
+  const handleSkip = () => {
+    if (videoRef.current) videoRef.current.pause();
+    setFading(true);
+    setTimeout(onDone, 900);
+  };
+
+  // Auto-play with sound
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    vid.muted = false;
+    vid.play().catch(() => {
+      setWaitingForTap(true);
+    });
+  }, []);
+
+  const handleTapToPlay = () => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    vid.muted = false;
+    vid.play();
+    setWaitingForTap(false);
+  };
+
+  return (
+    <motion.div
+      data-ocid="intro.panel"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black"
+      animate={{ opacity: fading ? 0 : 1, y: fading ? "100vh" : 0 }}
+      transition={{ duration: 0.9, ease: "easeInOut" }}
+    >
+      <div
+        className="relative w-full"
+        style={{ aspectRatio: "16/9", maxHeight: "100vh" }}
+      >
+        {/* biome-ignore lint/a11y/useMediaCaption: user-uploaded intro video */}
+        <video
+          ref={videoRef}
+          src={video.file.getDirectURL()}
+          onEnded={handleEnd}
+          onError={handleEnd}
+          autoPlay
+          playsInline
+          className="w-full h-full object-contain bg-black"
+          style={{ display: "block" }}
+        />
+
+        {/* Tap-to-play overlay when autoplay fails */}
+        {waitingForTap && (
+          <button
+            type="button"
+            data-ocid="intro.canvas_target"
+            onClick={handleTapToPlay}
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3"
+            style={{ background: "rgba(0,0,0,0.55)" }}
+          >
+            <div
+              className="w-20 h-20 rounded-full flex items-center justify-center"
+              style={{
+                background: "rgba(255,255,255,0.18)",
+                border: "2px solid rgba(255,255,255,0.5)",
+              }}
+            >
+              <Play className="w-8 h-8 text-white ml-1" fill="currentColor" />
+            </div>
+            <div className="flex items-center gap-2 text-white/80">
+              <Volume2 className="w-4 h-4" />
+              <span className="text-sm font-body">Tap to play with sound</span>
+            </div>
+          </button>
+        )}
+
+        {/* Skip button — only when not waiting for tap */}
+        {!waitingForTap && (
+          <button
+            type="button"
+            data-ocid="intro.skip_button"
+            onClick={handleSkip}
+            className="absolute bottom-8 right-6 font-body text-sm px-4 py-2 rounded-full text-white/80 hover:text-white transition-colors"
+            style={{ background: "rgba(0,0,0,0.45)" }}
+          >
+            Skip ›
+          </button>
+        )}
+      </div>
+    </motion.div>
+  );
+}
 
 // ─── Half-Screen Viewer ──────────────────────────────────────────────────────
 
@@ -97,7 +201,7 @@ function HalfScreenViewer({
   );
 }
 
-// ─── Floating Gallery (2nd PG) ───────────────────────────────────────────────
+// ─── Floating Gallery ────────────────────────────────────────────────────────
 
 interface FloatingItemProps {
   media: MediaEntry;
@@ -409,7 +513,8 @@ function VideoGrid({ videos }: { videos: MediaEntry[] }) {
 
 export default function GroupPage() {
   const { groupId } = useParams({ from: "/group/$groupId" });
-  const is2ndPG = groupId === "2nd_pg";
+  // Both 2nd PG and 3rd B.A get the floating gallery + intro video treatment
+  const isFloatingGroup = groupId === "2nd_pg" || groupId === "3rd_ba";
 
   const meta = GROUP_META[groupId] ?? {
     label: groupId,
@@ -423,14 +528,25 @@ export default function GroupPage() {
   const videos = groupMedia.filter((m) => m.mediaType === MediaType.video);
   const hasMedia = photos.length > 0 || videos.length > 0;
 
-  // For 2nd PG, merge photos + videos into a single floating list
+  // For floating groups, merge photos + videos into a single floating list
   const allGroupItems = [...photos, ...videos];
+
+  // Intro video: show for floating groups when a video exists and URL is valid
+  const introVideo = isFloatingGroup && videos.length > 0 ? videos[0] : null;
+  const introVideoUrl = introVideo?.file?.getDirectURL?.() ?? "";
+  const [introDone, setIntroDone] = useState(false);
+  const showIntro = !!introVideo && !!introVideoUrl && !introDone && !isLoading;
 
   return (
     <div
       className="min-h-screen grain-overlay"
       style={{ background: "oklch(96% 0.018 145)" }}
     >
+      {/* Fullscreen intro for floating groups */}
+      {showIntro && (
+        <IntroVideo video={introVideo} onDone={() => setIntroDone(true)} />
+      )}
+
       {/* Background orb */}
       <div
         className="fixed top-0 left-0 w-96 h-96 rounded-full pointer-events-none"
@@ -514,8 +630,8 @@ export default function GroupPage() {
               Photos and videos for {meta.label} will appear here soon!
             </p>
           </motion.div>
-        ) : is2ndPG ? (
-          /* ── 2nd PG: Floating gallery ── */
+        ) : isFloatingGroup ? (
+          /* ── Floating groups (2nd PG & 3rd B.A): Floating gallery ── */
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -542,7 +658,7 @@ export default function GroupPage() {
             <FloatingGallery items={allGroupItems} />
           </motion.div>
         ) : (
-          /* ── Other groups: Standard grid layout ── */
+          /* ── Other groups (3rd B.Com): Standard grid layout ── */
           <div className="space-y-14">
             {photos.length > 0 && (
               <motion.section
