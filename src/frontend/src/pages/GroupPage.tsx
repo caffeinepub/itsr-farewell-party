@@ -73,12 +73,26 @@ function IntroVideo({
       clearTimeout(initialLoadTimerRef.current);
       initialLoadTimerRef.current = null;
     }
+    const vid = videoRef.current;
+    if (!vid) return;
+    vid.play().catch(() => setWaitingForTap(true));
+  };
+
+  const handleLoadedMetadata = () => {
+    // video is accessible, reset load timer to give more time for actual playback
+    if (initialLoadTimerRef.current) {
+      clearTimeout(initialLoadTimerRef.current);
+      initialLoadTimerRef.current = setTimeout(triggerSkip, 13000);
+    }
+    const vid = videoRef.current;
+    if (!vid) return;
+    vid.play().catch(() => setWaitingForTap(true));
   };
 
   const handleWaiting = () => {
     setIsBuffering(true);
     if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
-    stallTimerRef.current = setTimeout(triggerSkip, 12000);
+    stallTimerRef.current = setTimeout(triggerSkip, 13000);
   };
 
   const handlePlaying = () => {
@@ -117,6 +131,7 @@ function IntroVideo({
           onEnded={handleEnd}
           onError={handleEnd}
           onCanPlay={handleCanPlay}
+          onLoadedMetadata={handleLoadedMetadata}
           onWaiting={handleWaiting}
           onStalled={handleWaiting}
           onPlaying={handlePlaying}
@@ -141,7 +156,7 @@ function IntroVideo({
               }}
             />
             <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "0.85rem" }}>
-              Loading video…
+              Loading… (tap Skip if slow)
             </p>
           </div>
         )}
@@ -652,7 +667,8 @@ function VideoGrid({ videos }: { videos: MediaEntry[] }) {
 
 export default function GroupPage() {
   const { groupId } = useParams({ from: "/group/$groupId" });
-  const isFloatingGroup = groupId === "2nd_pg" || groupId === "3rd_ba";
+  const isFloatingGroup =
+    groupId === "2nd_pg" || groupId === "3rd_ba" || groupId === "3rd_bcom";
 
   const meta = GROUP_META[groupId] ?? {
     label: groupId,

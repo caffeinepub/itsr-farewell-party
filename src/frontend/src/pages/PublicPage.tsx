@@ -29,35 +29,16 @@ const GROUPS = [
   },
 ];
 
-const CARD_STYLES = [
-  {
-    background: "oklch(100% 0 0 / 0.85)",
-    border: "1.5px solid oklch(62% 0.18 148 / 0.5)",
-    boxShadow:
-      "0 8px 32px oklch(55% 0.16 148 / 0.25), inset 0 1px 0 oklch(90% 0.1 148 / 0.4)",
-    hoverShadow:
-      "0 14px 50px oklch(50% 0.18 148 / 0.35), 0 0 35px oklch(58% 0.18 148 / 0.2)",
-    hoverBorder: "oklch(55% 0.2 148 / 0.65)",
-  },
-  {
-    background: "oklch(93% 0.06 148 / 0.85)",
-    border: "1.5px solid oklch(55% 0.18 148 / 0.55)",
-    boxShadow:
-      "0 8px 32px oklch(50% 0.18 148 / 0.28), inset 0 1px 0 oklch(85% 0.12 148 / 0.45)",
-    hoverShadow:
-      "0 14px 50px oklch(45% 0.2 148 / 0.38), 0 0 35px oklch(52% 0.2 148 / 0.22)",
-    hoverBorder: "oklch(48% 0.22 148 / 0.7)",
-  },
-  {
-    background: "oklch(100% 0 0 / 0.85)",
-    border: "1.5px solid oklch(62% 0.18 148 / 0.5)",
-    boxShadow:
-      "0 8px 32px oklch(55% 0.16 148 / 0.25), inset 0 1px 0 oklch(90% 0.1 148 / 0.4)",
-    hoverShadow:
-      "0 14px 50px oklch(50% 0.18 148 / 0.35), 0 0 35px oklch(58% 0.18 148 / 0.2)",
-    hoverBorder: "oklch(55% 0.2 148 / 0.65)",
-  },
-];
+// All cards: identical white glass with soft floating light green glow
+const CARD_STYLE = {
+  background: "oklch(100% 0 0 / 0.82)",
+  border: "1.5px solid oklch(68% 0.14 148 / 0.4)",
+  boxShadow:
+    "0 8px 32px oklch(60% 0.14 148 / 0.18), inset 0 1px 0 oklch(92% 0.08 148 / 0.5)",
+  hoverShadow:
+    "0 14px 50px oklch(55% 0.17 148 / 0.28), 0 0 40px oklch(62% 0.16 148 / 0.18)",
+  hoverBorder: "oklch(58% 0.18 148 / 0.6)",
+};
 
 // Stars for sparkle layer
 const STARS = Array.from({ length: 28 }, (_, i) => ({
@@ -410,86 +391,83 @@ export default function PublicPage() {
 
         {/* Group cards */}
         <div className="flex flex-col sm:flex-row gap-5 md:gap-8 items-center justify-center w-full max-w-3xl">
-          {GROUPS.map((group, i) => {
-            const cardStyle = CARD_STYLES[i];
-            return (
-              <motion.div
-                key={group.id}
-                initial={{ opacity: 0, y: 40, scale: 0.92 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{
-                  duration: 0.8,
-                  delay: group.delay,
-                  ease: [0.22, 1, 0.36, 1],
-                }}
-                className="w-full sm:w-56"
-                style={{
-                  animation: "float-slow 7s ease-in-out infinite",
-                  animationDelay: group.floatDelay,
-                }}
+          {GROUPS.map((group) => (
+            <motion.div
+              key={group.id}
+              initial={{ opacity: 0, y: 40, scale: 0.92 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{
+                duration: 0.8,
+                delay: group.delay,
+                ease: [0.22, 1, 0.36, 1],
+              }}
+              className="w-full sm:w-56"
+              style={{
+                animation: "float-slow 7s ease-in-out infinite",
+                animationDelay: group.floatDelay,
+              }}
+            >
+              <Link
+                to="/group/$groupId"
+                params={{ groupId: group.id }}
+                data-ocid={`group.${group.id}.button`}
+                className="block"
               >
-                <Link
-                  to="/group/$groupId"
-                  params={{ groupId: group.id }}
-                  data-ocid={`group.${group.id}.button`}
-                  className="block"
+                <motion.div
+                  whileHover={{ scale: 1.07, y: -8 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 320, damping: 22 }}
+                  className="rounded-2xl p-8 text-center cursor-pointer transition-all"
+                  style={{
+                    background: CARD_STYLE.background,
+                    border: CARD_STYLE.border,
+                    backdropFilter: "blur(20px)",
+                    boxShadow: CARD_STYLE.boxShadow,
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.boxShadow =
+                      CARD_STYLE.hoverShadow;
+                    (e.currentTarget as HTMLElement).style.borderColor =
+                      CARD_STYLE.hoverBorder;
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.boxShadow =
+                      CARD_STYLE.boxShadow;
+                    (e.currentTarget as HTMLElement).style.borderColor = "";
+                    (e.currentTarget as HTMLElement).style.border =
+                      CARD_STYLE.border;
+                  }}
                 >
-                  <motion.div
-                    whileHover={{ scale: 1.07, y: -8 }}
-                    whileTap={{ scale: 0.97 }}
-                    transition={{ type: "spring", stiffness: 320, damping: 22 }}
-                    className="rounded-2xl p-8 text-center cursor-pointer transition-all"
-                    style={{
-                      background: cardStyle.background,
-                      border: cardStyle.border,
-                      backdropFilter: "blur(20px)",
-                      boxShadow: cardStyle.boxShadow,
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.boxShadow =
-                        cardStyle.hoverShadow;
-                      (e.currentTarget as HTMLElement).style.borderColor =
-                        cardStyle.hoverBorder;
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.boxShadow =
-                        cardStyle.boxShadow;
-                      (e.currentTarget as HTMLElement).style.borderColor = "";
-                      (e.currentTarget as HTMLElement).style.border =
-                        cardStyle.border;
-                    }}
+                  <div className="text-4xl mb-3">{group.emoji}</div>
+                  <h2
+                    className="font-display text-2xl font-bold mb-1"
+                    style={{ color: "oklch(28% 0.07 155)" }}
                   >
-                    <div className="text-4xl mb-3">{group.emoji}</div>
-                    <h2
-                      className="font-display text-2xl font-bold mb-1"
-                      style={{ color: "oklch(28% 0.07 155)" }}
-                    >
-                      {group.label}
-                    </h2>
-                    <p
-                      className="font-body text-xs tracking-wider uppercase"
-                      style={{ color: "oklch(48% 0.12 148)" }}
-                    >
-                      {group.desc}
-                    </p>
-                    <div
-                      className="mt-4 mx-auto w-10 h-0.5 rounded-full"
-                      style={{
-                        background:
-                          "linear-gradient(90deg, transparent, oklch(55% 0.16 148 / 0.5), transparent)",
-                      }}
-                    />
-                    <p
-                      className="mt-3 font-body text-xs"
-                      style={{ color: "oklch(52% 0.14 148)" }}
-                    >
-                      View Gallery →
-                    </p>
-                  </motion.div>
-                </Link>
-              </motion.div>
-            );
-          })}
+                    {group.label}
+                  </h2>
+                  <p
+                    className="font-body text-xs tracking-wider uppercase"
+                    style={{ color: "oklch(48% 0.12 148)" }}
+                  >
+                    {group.desc}
+                  </p>
+                  <div
+                    className="mt-4 mx-auto w-10 h-0.5 rounded-full"
+                    style={{
+                      background:
+                        "linear-gradient(90deg, transparent, oklch(55% 0.16 148 / 0.5), transparent)",
+                    }}
+                  />
+                  <p
+                    className="mt-3 font-body text-xs"
+                    style={{ color: "oklch(52% 0.14 148)" }}
+                  >
+                    View Gallery →
+                  </p>
+                </motion.div>
+              </Link>
+            </motion.div>
+          ))}
         </div>
       </main>
 

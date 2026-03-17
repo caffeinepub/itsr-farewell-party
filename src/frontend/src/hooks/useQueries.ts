@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalBlob, MediaType } from "../backend";
 import type { MediaEntry } from "../backend";
 import { useActor } from "./useActor";
+import { useInternetIdentity } from "./useInternetIdentity";
 
 // Push all media URLs to the service worker so they are pre-cached in background
 function precacheMediaUrls(items: MediaEntry[]) {
@@ -85,8 +86,10 @@ export function useDeleteMedia() {
 
 export function useIsAdmin() {
   const { actor, isFetching } = useActor();
+  const { identity } = useInternetIdentity();
+  const principalKey = identity?.getPrincipal().toString() ?? "anonymous";
   return useQuery<boolean>({
-    queryKey: ["isAdmin"],
+    queryKey: ["isAdmin", principalKey],
     queryFn: async () => {
       if (!actor) return false;
       try {
@@ -97,6 +100,7 @@ export function useIsAdmin() {
       }
     },
     enabled: !!actor && !isFetching,
+    staleTime: 0,
   });
 }
 

@@ -34,16 +34,61 @@ type LoginPhase =
   | "denied"
   | "error";
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function retryIsAdmin(
+  actor: { isCallerAdmin: () => Promise<boolean> },
+  retries = 4,
+  delay = 800,
+): Promise<boolean> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const result = await actor.isCallerAdmin();
+      if (result) return true;
+    } catch {
+      // ignore and retry
+    }
+    if (i < retries - 1) await sleep(delay);
+  }
+  return false;
+}
+
 export default function AdminLogin() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { login, loginStatus, isLoggingIn, identity, clear } =
     useInternetIdentity();
   const { actor, isFetching: actorFetching } = useActor();
-  const { data: isAdmin, isLoading: checkingAdmin } = useIsAdmin();
+  const {
+    data: isAdmin,
+    isLoading: isAdminLoading,
+    isFetching: isAdminFetching,
+  } = useIsAdmin();
+  const checkingAdmin = isAdminLoading || isAdminFetching;
 
   const [phase, setPhase] = useState<LoginPhase>("idle");
   const claimingRef = useRef(false);
+  const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Stuck-screen guard: if verifying/checking/claiming takes too long, reset to error
+  useEffect(() => {
+    if (phase === "verifying" || phase === "checking" || phase === "claiming") {
+      stuckTimerRef.current = setTimeout(() => {
+        claimingRef.current = false;
+        setPhase("error");
+      }, 20000);
+    } else {
+      if (stuckTimerRef.current) {
+        clearTimeout(stuckTimerRef.current);
+        stuckTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
+    };
+  }, [phase]);
 
   useEffect(() => {
     if (!identity) {
@@ -59,52 +104,54 @@ export default function AdminLogin() {
       setPhase("checking");
       return;
     }
-    // Already confirmed admin — go to dashboard
+    // Already confirmed admin via query — go to dashboard
     if (isAdmin === true) {
       navigate({ to: "/admin/dashboard" });
       return;
     }
-    // isAdmin returned false — try to claim first admin slot
+    // isAdmin returned false — do a fresh direct check before claiming
     if (isAdmin === false && !claimingRef.current) {
       claimingRef.current = true;
       setPhase("claiming");
-      actor
-        .claimFirstAdmin()
-        .then(async (success: boolean) => {
-          if (success) {
+
+      (async () => {
+        // Step 1: fresh direct check — query cache may be stale
+        try {
+          const freshCheck = await actor.isCallerAdmin();
+          if (freshCheck) {
             await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
             navigate({ to: "/admin/dashboard" });
             return;
           }
-          // Claim returned false (admin slot taken).
-          // Re-check — maybe we ARE the admin but the first check failed.
-          try {
-            const recheckAdmin = await actor.isCallerAdmin();
-            if (recheckAdmin) {
-              await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
-              navigate({ to: "/admin/dashboard" });
-              return;
-            }
-          } catch {
-            // re-check also failed — fall through to denied
-          }
-          setPhase("denied");
-        })
-        .catch(async () => {
-          // Claim threw — re-check before giving up
-          try {
-            const recheckAdmin = await actor.isCallerAdmin();
-            if (recheckAdmin) {
-              await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
-              navigate({ to: "/admin/dashboard" });
-              return;
-            }
-          } catch {
-            // ignore
-          }
+        } catch {
+          // ignore, proceed to claim
+        }
+
+        // Step 2: try to claim the first-admin slot
+        let claimSucceeded = false;
+        try {
+          claimSucceeded = await actor.claimFirstAdmin();
+        } catch {
+          // claim threw — fall through to retry
+        }
+
+        if (claimSucceeded) {
           await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
-          setPhase("error");
-        });
+          navigate({ to: "/admin/dashboard" });
+          return;
+        }
+
+        // Step 3: claim failed or threw — retry isCallerAdmin up to 4 times
+        const confirmedAdmin = await retryIsAdmin(actor);
+        if (confirmedAdmin) {
+          await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
+          navigate({ to: "/admin/dashboard" });
+          return;
+        }
+
+        // Genuinely not admin
+        setPhase("denied");
+      })();
     }
   }, [
     identity,
