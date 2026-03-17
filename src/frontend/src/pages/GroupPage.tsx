@@ -3,13 +3,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Camera, Film, Play, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { MediaType } from "../backend";
 import type { MediaEntry } from "../backend";
 import { useListMedia } from "../hooks/useQueries";
-
-// TODO: Replace with actual intro video URL
-const INTRO_VIDEO_URL_2ND_PG = "https://www.w3schools.com/html/mov_bbb.mp4";
 
 const GROUP_META: Record<
   string,
@@ -21,69 +18,6 @@ const GROUP_META: Record<
 };
 
 const SKELETON_KEYS = ["s1", "s2", "s3", "s4", "s5", "s6"];
-
-// ─── Intro Video Overlay (2nd PG only) ──────────────────────────────────────
-
-function IntroVideoOverlay({ onDone }: { onDone: () => void }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [exiting, setExiting] = useState(false);
-
-  const handleDone = useCallback(() => {
-    if (exiting) return;
-    setExiting(true);
-    // Let the CSS transition run (1.2s), then call onDone
-    setTimeout(onDone, 1200);
-  }, [exiting, onDone]);
-
-  useEffect(() => {
-    const vid = videoRef.current;
-    if (!vid) return;
-    vid.play().catch(() => {
-      // Autoplay blocked — skip straight to gallery
-      handleDone();
-    });
-  }, [handleDone]);
-
-  return (
-    <div
-      data-ocid="intro.video"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black"
-      style={{
-        transition: exiting
-          ? "opacity 1.2s ease-in, transform 1.2s ease-in"
-          : "none",
-        opacity: exiting ? 0 : 1,
-        transform: exiting ? "scale(2.5)" : "scale(1)",
-        pointerEvents: exiting ? "none" : "auto",
-      }}
-    >
-      {/* biome-ignore lint/a11y/useMediaCaption: intro cinematic video */}
-      <video
-        ref={videoRef}
-        src={INTRO_VIDEO_URL_2ND_PG}
-        className="w-full h-full object-cover"
-        playsInline
-        onEnded={handleDone}
-      />
-
-      {/* Skip button */}
-      {!exiting && (
-        <button
-          type="button"
-          data-ocid="intro.skip_button"
-          onClick={handleDone}
-          className="absolute bottom-8 right-8 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-body text-white/80 hover:text-white transition-colors"
-          style={{
-            background: "rgba(0,0,0,0.45)",
-            border: "1px solid rgba(255,255,255,0.2)",
-          }}
-        >
-          Skip <span className="opacity-60">›</span>
-        </button>
-      )}
-    </div>
-  );
-}
 
 // ─── Half-Screen Viewer ──────────────────────────────────────────────────────
 
@@ -483,8 +417,6 @@ export default function GroupPage() {
     desc: "Group Gallery",
   };
 
-  const [introPlaying, setIntroPlaying] = useState(is2ndPG);
-
   const { data: allMedia, isLoading } = useListMedia();
   const groupMedia = allMedia?.filter((m) => m.group === groupId) ?? [];
   const photos = groupMedia.filter((m) => m.mediaType === MediaType.photo);
@@ -499,11 +431,6 @@ export default function GroupPage() {
       className="min-h-screen grain-overlay"
       style={{ background: "oklch(96% 0.018 145)" }}
     >
-      {/* Intro video overlay — 2nd PG only */}
-      {is2ndPG && introPlaying && (
-        <IntroVideoOverlay onDone={() => setIntroPlaying(false)} />
-      )}
-
       {/* Background orb */}
       <div
         className="fixed top-0 left-0 w-96 h-96 rounded-full pointer-events-none"

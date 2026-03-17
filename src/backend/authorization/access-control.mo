@@ -37,26 +37,13 @@ module {
     };
   };
 
-  // Register the first caller as admin (no token required). Returns true if granted.
-  public func selfRegisterFirstAdmin(state : AccessControlState, caller : Principal) : Bool {
-    if (caller.isAnonymous()) { return false };
-    if (state.adminAssigned) { return false };
-    state.userRoles.add(caller, #admin);
-    state.adminAssigned := true;
-    true;
-  };
-
-  // Reset all admin state so the next caller of selfRegisterFirstAdmin becomes admin.
-  public func resetAdminState(state : AccessControlState) {
-    state.adminAssigned := false;
-    state.userRoles.clear();
-  };
-
   public func getUserRole(state : AccessControlState, caller : Principal) : UserRole {
     if (caller.isAnonymous()) { return #guest };
     switch (state.userRoles.get(caller)) {
       case (?role) { role };
-      case (null) { #guest };
+      case (null) {
+        Runtime.trap("User is not registered");
+      };
     };
   };
 

@@ -55,7 +55,15 @@ actor {
 
   // Self-register as admin if no admin exists yet
   public shared ({ caller }) func claimFirstAdmin() : async Bool {
-    AccessControl.selfRegisterFirstAdmin(accessControlState, caller);
+    if (accessControlState.adminAssigned) {
+      return false;
+    };
+    if (caller.isAnonymous()) {
+      return false;
+    };
+    accessControlState.userRoles.add(caller, #admin);
+    accessControlState.adminAssigned := true;
+    true;
   };
 
   // Check if any admin has been assigned
@@ -69,7 +77,8 @@ actor {
     if (accessControlState.adminAssigned and not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Only the current admin can reset admin state");
     };
-    AccessControl.resetAdminState(accessControlState);
+    accessControlState.userRoles.clear();
+    accessControlState.adminAssigned := false;
   };
 
   // User Profile Functions
