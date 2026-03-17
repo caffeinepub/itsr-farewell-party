@@ -1,0 +1,136 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&family=Figtree:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light sage green + white farewell theme */
+    --background: 97 0.012 145;
+    --foreground: 22 0.04 160;
+
+    --card: 99 0.006 145;
+    --card-foreground: 22 0.04 160;
+
+    --popover: 99 0.006 145;
+    --popover-foreground: 22 0.04 160;
+
+    /* Sage green primary */
+    --primary: 52 0.13 148;
+    --primary-foreground: 99 0.006 145;
+
+    --secondary: 93 0.025 145;
+    --secondary-foreground: 35 0.05 155;
+
+    --muted: 93 0.02 145;
+    --muted-foreground: 55 0.05 155;
+
+    --accent: 72 0.12 148;
+    --accent-foreground: 99 0.006 145;
+
+    --destructive: 55 0.22 25;
+    --destructive-foreground: 98 0.01 80;
+
+    --border: 88 0.03 145;
+    --input: 88 0.03 145;
+    --ring: 52 0.13 148;
+
+    --radius: 0.75rem;
+
+    --chart-1: 52 0.13 148;
+    --chart-2: 65 0.12 148;
+    --chart-3: 75 0.17 75;
+    --chart-4: 45 0.1 40;
+    --chart-5: 35 0.08 30;
+
+    --sidebar: 97 0.012 145;
+    --sidebar-foreground: 22 0.04 160;
+    --sidebar-primary: 52 0.13 148;
+    --sidebar-primary-foreground: 99 0.006 145;
+    --sidebar-accent: 93 0.025 145;
+    --sidebar-accent-foreground: 35 0.05 155;
+    --sidebar-border: 88 0.03 145;
+    --sidebar-ring: 52 0.13 148;
+
+    /* Gold accent for HOME title */
+    --gold: 75 0.17 75;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Figtree", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: "Playfair Display", serif;
+  }
+}
+
+@layer utilities {
+  .text-gold {
+    color: oklch(75% 0.17 75);
+  }
+
+  .bg-gold {
+    background-color: oklch(75% 0.17 75);
+  }
+
+  .border-gold {
+    border-color: oklch(75% 0.17 75);
+  }
+
+  .glow-green {
+    box-shadow: 0 8px 40px oklch(52% 0.13 148 / 0.25), 0 2px 12px
+      oklch(52% 0.13 148 / 0.15);
+  }
+
+  .glow-gold {
+    box-shadow: 0 0 30px oklch(75% 0.17 75 / 0.25), 0 0 60px
+      oklch(75% 0.17 75 / 0.1);
+  }
+
+  .glass-card {
+    background: oklch(99% 0.005 145 / 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid oklch(88% 0.04 145 / 0.6);
+  }
+
+  .glass-card-green {
+    background: oklch(96% 0.02 145 / 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1.5px solid oklch(75% 0.1 148 / 0.4);
+  }
+
+  .grain-overlay::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.018;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
