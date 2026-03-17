@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalBlob, MediaType } from "../backend";
 import type { MediaEntry } from "../backend";
 import { useActor } from "./useActor";
-import { useInternetIdentity } from "./useInternetIdentity";
 
 // Push all media URLs to the service worker so they are pre-cached in background
 function precacheMediaUrls(items: MediaEntry[]) {
@@ -56,13 +55,18 @@ export function useAddMedia() {
       group: string;
       onProgress?: (pct: number) => void;
     }) => {
-      if (!actor) throw new Error("Not authenticated");
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      let blob = ExternalBlob.fromBytes(bytes);
-      if (onProgress) {
-        blob = blob.withUploadProgress(onProgress);
+      if (!actor) throw new Error("Actor not ready");
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let blob = ExternalBlob.fromBytes(bytes);
+        if (onProgress) {
+          blob = blob.withUploadProgress(onProgress);
+        }
+        return await actor.addMedia(title, mediaType, blob, group);
+      } catch (err) {
+        console.error("[useAddMedia] Upload error:", err);
+        throw err;
       }
-      return actor.addMedia(title, mediaType, blob, group);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["media"] });
@@ -75,32 +79,12 @@ export function useDeleteMedia() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      if (!actor) throw new Error("Not authenticated");
+      if (!actor) throw new Error("Actor not ready");
       return actor.deleteMedia(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["media"] });
     },
-  });
-}
-
-export function useIsAdmin() {
-  const { actor, isFetching } = useActor();
-  const { identity } = useInternetIdentity();
-  const principalKey = identity?.getPrincipal().toString() ?? "anonymous";
-  return useQuery<boolean>({
-    queryKey: ["isAdmin", principalKey],
-    queryFn: async () => {
-      if (!actor) return false;
-      try {
-        return await actor.isCallerAdmin();
-      } catch {
-        // If the call fails, treat as non-admin to avoid breaking the UI
-        return false;
-      }
-    },
-    enabled: !!actor && !isFetching,
-    staleTime: 0,
   });
 }
 

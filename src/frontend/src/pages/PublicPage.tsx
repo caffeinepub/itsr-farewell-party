@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
+import { MediaType } from "../backend";
+import { useListMedia } from "../hooks/useQueries";
 
 const GROUPS = [
   {
@@ -195,6 +197,50 @@ function FloatingLeaves() {
   );
 }
 
+// Hidden component that preloads intro video URLs while user is on homepage
+function VideoPreloader() {
+  const { data: allMedia } = useListMedia();
+
+  useEffect(() => {
+    if (!allMedia) return;
+    const introGroups = ["2nd_pg", "3rd_bcom", "3rd_ba"];
+    const injected: HTMLLinkElement[] = [];
+
+    for (const groupId of introGroups) {
+      const videos = allMedia.filter(
+        (m) => m.group === groupId && m.mediaType === MediaType.video,
+      );
+      if (videos.length === 0) continue;
+      const url = videos[0].file?.getDirectURL?.();
+      if (!url) continue;
+
+      // Inject <link rel="preload" as="video"> so browser starts fetching immediately
+      const existing = document.querySelector(`link[href="${url}"]`);
+      if (existing) continue;
+
+      const link = document.createElement("link");
+      link.rel = "preload";
+      link.as = "video";
+      link.href = url;
+      document.head.appendChild(link);
+      injected.push(link);
+    }
+
+    // Clean up on unmount
+    return () => {
+      for (const link of injected) {
+        try {
+          document.head.removeChild(link);
+        } catch {
+          /* already removed */
+        }
+      }
+    };
+  }, [allMedia]);
+
+  return null;
+}
+
 export default function PublicPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -261,6 +307,9 @@ export default function PublicPage() {
           "linear-gradient(135deg, oklch(97% 0.012 145) 0%, oklch(94% 0.025 148) 40%, oklch(96% 0.018 155) 100%)",
       }}
     >
+      {/* Preload intro videos in background while user is on homepage */}
+      <VideoPreloader />
+
       {/* Canvas particles */}
       <canvas
         ref={canvasRef}

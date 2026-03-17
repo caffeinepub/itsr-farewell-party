@@ -28,15 +28,14 @@ import {
   Trash2,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { MediaEntry } from "../backend";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import { useActor } from "../hooks/useActor";
 import {
   MediaType,
   useAddMedia,
   useDeleteMedia,
-  useIsAdmin,
   useListMedia,
 } from "../hooks/useQueries";
 
@@ -65,7 +64,11 @@ function UploadButton({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const addMedia = useAddMedia();
+  const { actor } = useActor();
   const [progress, setProgress] = useState<number | null>(null);
+
+  const inputId = `file-input-${mediaType}-${group}`;
+  const isDisabled = addMedia.isPending || !group || !actor;
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -99,17 +102,25 @@ function UploadButton({
     <div className="flex flex-col gap-2">
       <input
         ref={fileRef}
+        id={inputId}
         type="file"
         accept={accept}
-        className="hidden"
+        className="sr-only"
         onChange={handleFile}
+        disabled={isDisabled}
       />
-      <Button
+      <label
+        htmlFor={inputId}
         data-ocid={ocid}
-        onClick={() => fileRef.current?.click()}
-        disabled={addMedia.isPending || !group}
-        className="flex items-center gap-2 font-body font-semibold px-6 py-5 rounded-xl"
-        style={{ background: "oklch(52% 0.13 148)", color: "white" }}
+        className="flex items-center gap-2 font-body font-semibold px-6 py-5 rounded-xl cursor-pointer select-none"
+        style={{
+          background: isDisabled
+            ? "oklch(70% 0.07 148)"
+            : "oklch(52% 0.13 148)",
+          color: "white",
+          opacity: isDisabled ? 0.6 : 1,
+          pointerEvents: isDisabled ? "none" : "auto",
+        }}
       >
         {addMedia.isPending && progress !== null ? (
           <Loader2 className="w-5 h-5 animate-spin" />
@@ -117,7 +128,7 @@ function UploadButton({
           <Icon className="w-5 h-5" />
         )}
         {label}
-      </Button>
+      </label>
       {progress !== null && (
         <Progress
           value={progress}
@@ -231,68 +242,20 @@ function MediaCard({
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { identity, clear } = useInternetIdentity();
-  const { data: isAdmin, isLoading: checkingAdmin } = useIsAdmin();
   const { data: media, isLoading, isError } = useListMedia();
   const deleteMedia = useDeleteMedia();
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<string>("2nd_pg");
 
-  if (!identity && !checkingAdmin) {
-    navigate({ to: "/admin" });
-    return null;
-  }
-
-  if (checkingAdmin) {
-    return (
-      <div
-        data-ocid="dashboard.loading_state"
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: "oklch(96% 0.018 145)" }}
-      >
-        <Loader2
-          className="w-8 h-8 animate-spin"
-          style={{ color: "oklch(52% 0.13 148)" }}
-        />
-      </div>
-    );
-  }
-
-  if (isAdmin === false) {
-    return (
-      <div
-        data-ocid="dashboard.error_state"
-        className="min-h-screen flex items-center justify-center px-6"
-        style={{ background: "oklch(96% 0.018 145)" }}
-      >
-        <div className="text-center">
-          <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-4" />
-          <h2
-            className="font-display text-2xl font-bold mb-2"
-            style={{ color: "oklch(28% 0.08 155)" }}
-          >
-            Access Denied
-          </h2>
-          <p
-            className="font-body text-sm mb-6"
-            style={{ color: "oklch(55% 0.07 148)" }}
-          >
-            You don't have admin privileges.
-          </p>
-          <Button
-            data-ocid="dashboard.primary_button"
-            onClick={() => navigate({ to: "/" })}
-            style={{ background: "oklch(52% 0.13 148)", color: "white" }}
-          >
-            Go Home
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  // Guard: only allow if logged in via password
+  useEffect(() => {
+    if (sessionStorage.getItem("adminLoggedIn") !== "true") {
+      navigate({ to: "/admin" });
+    }
+  }, [navigate]);
 
   const handleLogout = () => {
-    clear();
+    sessionStorage.removeItem("adminLoggedIn");
     navigate({ to: "/" });
   };
 
@@ -414,7 +377,7 @@ export default function AdminDashboard() {
 
           <div className="flex flex-wrap gap-4">
             <UploadButton
-              data-ocid="upload.photo_button"
+              data-ocid="upload.upload_button"
               label="Upload Photo"
               icon={Camera}
               accept="image/*"
@@ -422,7 +385,7 @@ export default function AdminDashboard() {
               group={selectedGroup}
             />
             <UploadButton
-              data-ocid="upload.video_button"
+              data-ocid="upload.primary_button"
               label="Upload Video"
               icon={Film}
               accept="video/*"

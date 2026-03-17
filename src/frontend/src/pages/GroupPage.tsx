@@ -21,6 +21,9 @@ const SKELETON_KEYS = ["s1", "s2", "s3", "s4", "s5", "s6"];
 
 const SPINNER_CSS = "@keyframes spin { to { transform: rotate(360deg); } }";
 
+const INITIAL_LOAD_TIMEOUT_MS = 25000;
+const STALL_TIMEOUT_MS = 30000;
+
 // ─── Fullscreen Intro Video ───────────────────────────────────────────────────
 
 function IntroVideo({
@@ -38,10 +41,20 @@ function IntroVideo({
     null,
   );
   const fadingRef = useRef(false);
+  const progressHiddenRef = useRef(false);
+  const videoStartedRef = useRef(false);
 
   const triggerSkip = useCallback(() => {
     if (fadingRef.current) return;
     fadingRef.current = true;
+    if (initialLoadTimerRef.current) {
+      clearTimeout(initialLoadTimerRef.current);
+      initialLoadTimerRef.current = null;
+    }
+    if (stallTimerRef.current) {
+      clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
     if (videoRef.current) videoRef.current.pause();
     setFading(true);
     setTimeout(onDone, 900);
@@ -51,7 +64,11 @@ function IntroVideo({
     const vid = videoRef.current;
     if (!vid) return;
 
-    initialLoadTimerRef.current = setTimeout(triggerSkip, 15000);
+    // Hard timeout as safety net
+    initialLoadTimerRef.current = setTimeout(
+      triggerSkip,
+      INITIAL_LOAD_TIMEOUT_MS,
+    );
 
     vid.muted = false;
     vid.play().catch(() => {
@@ -59,9 +76,14 @@ function IntroVideo({
     });
 
     return () => {
-      if (initialLoadTimerRef.current)
+      if (initialLoadTimerRef.current) {
         clearTimeout(initialLoadTimerRef.current);
-      if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
+        initialLoadTimerRef.current = null;
+      }
+      if (stallTimerRef.current) {
+        clearTimeout(stallTimerRef.current);
+        stallTimerRef.current = null;
+      }
     };
   }, [triggerSkip]);
 
@@ -78,11 +100,29 @@ function IntroVideo({
     vid.play().catch(() => setWaitingForTap(true));
   };
 
+  const handleLoadedData = () => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    vid.play().catch(() => setWaitingForTap(true));
+  };
+
+  const handleProgress = () => {
+    if (progressHiddenRef.current) return;
+    const vid = videoRef.current;
+    if (vid && vid.buffered.length > 0) {
+      progressHiddenRef.current = true;
+      setIsVideoLoading(false);
+      if (initialLoadTimerRef.current) {
+        clearTimeout(initialLoadTimerRef.current);
+        initialLoadTimerRef.current = null;
+      }
+    }
+  };
+
   const handleLoadedMetadata = () => {
-    // video is accessible, reset load timer to give more time for actual playback
     if (initialLoadTimerRef.current) {
       clearTimeout(initialLoadTimerRef.current);
-      initialLoadTimerRef.current = setTimeout(triggerSkip, 13000);
+      initialLoadTimerRef.current = null;
     }
     const vid = videoRef.current;
     if (!vid) return;
@@ -91,12 +131,23 @@ function IntroVideo({
 
   const handleWaiting = () => {
     setIsBuffering(true);
-    if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
-    stallTimerRef.current = setTimeout(triggerSkip, 13000);
+    if (videoStartedRef.current) {
+      if (stallTimerRef.current) {
+        clearTimeout(stallTimerRef.current);
+        stallTimerRef.current = null;
+      }
+      stallTimerRef.current = setTimeout(triggerSkip, STALL_TIMEOUT_MS);
+    }
   };
 
   const handlePlaying = () => {
+    videoStartedRef.current = true;
     setIsBuffering(false);
+    setIsVideoLoading(false);
+    if (initialLoadTimerRef.current) {
+      clearTimeout(initialLoadTimerRef.current);
+      initialLoadTimerRef.current = null;
+    }
     if (stallTimerRef.current) {
       clearTimeout(stallTimerRef.current);
       stallTimerRef.current = null;
@@ -131,6 +182,8 @@ function IntroVideo({
           onEnded={handleEnd}
           onError={handleEnd}
           onCanPlay={handleCanPlay}
+          onLoadedData={handleLoadedData}
+          onProgress={handleProgress}
           onLoadedMetadata={handleLoadedMetadata}
           onWaiting={handleWaiting}
           onStalled={handleWaiting}
@@ -138,29 +191,31 @@ function IntroVideo({
           autoPlay
           playsInline
           preload="auto"
+          {...({ fetchpriority: "high" } as object)}
           className="w-full h-full object-contain bg-black"
           style={{ display: "block" }}
         />
 
+        {/* Simple spinner while loading */}
         {isVideoLoading && (
-          <div
-            className="absolute inset-0 flex flex-col items-center justify-center gap-4"
-            style={{ background: "rgba(0,0,0,0.82)" }}
-          >
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
             <div
-              className="w-16 h-16 rounded-full border-4"
+              className="w-12 h-12 rounded-full border-4"
               style={{
                 borderColor: "rgba(255,255,255,0.15)",
                 borderTopColor: "rgba(255,255,255,0.85)",
                 animation: "spin 1s linear infinite",
               }}
             />
-            <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "0.85rem" }}>
-              Loading… (tap Skip if slow)
-            </p>
+            <span
+              style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.75rem" }}
+            >
+              tap Skip if slow
+            </span>
           </div>
         )}
 
+        {/* Simple buffering pill */}
         {!isVideoLoading && isBuffering && (
           <div
             className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full"
@@ -385,11 +440,13 @@ function FloatingItem({ media, index, onClick }: FloatingItemProps) {
     >
       {isVideo ? (
         <>
+          {/* preload="none" so thumbnails don't compete with the intro video for bandwidth */}
           <video
             src={media.file.getDirectURL()}
             className="w-full h-full object-cover"
             muted
             playsInline
+            preload="none"
           />
           <div
             className="absolute inset-0 flex items-center justify-center"
@@ -619,10 +676,12 @@ function VideoGrid({ videos }: { videos: MediaEntry[] }) {
             }}
             onClick={() => setSelected(video)}
           >
+            {/* preload="none" so thumbnails don't compete with the intro video for bandwidth */}
             <video
               src={video.file.getDirectURL()}
               className="w-full h-full object-cover"
               muted
+              preload="none"
             />
             <div
               className="absolute inset-0 flex items-center justify-center transition-colors"

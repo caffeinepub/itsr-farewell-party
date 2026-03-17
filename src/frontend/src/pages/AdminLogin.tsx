@@ -1,11 +1,7 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Loader2, LogIn, LogOut, ShieldX } from "lucide-react";
+import { KeyRound, LogIn } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
-import { useActor } from "../hooks/useActor";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import { useIsAdmin } from "../hooks/useQueries";
+import { useState } from "react";
 
 const COLORS = {
   pageBg: "oklch(96% 0.018 145)",
@@ -22,173 +18,28 @@ const COLORS = {
   errorText: "oklch(35% 0.15 25)",
   btnBg: "oklch(42% 0.13 148)",
   btnText: "oklch(99% 0.005 145)",
-  outlineBorder: "oklch(75% 0.1 148)",
-  outlineText: "oklch(42% 0.13 148)",
+  inputBorder: "oklch(75% 0.08 148)",
+  inputFocus: "oklch(52% 0.13 148)",
 };
-
-type LoginPhase =
-  | "idle"
-  | "verifying"
-  | "checking"
-  | "claiming"
-  | "denied"
-  | "error";
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function retryIsAdmin(
-  actor: { isCallerAdmin: () => Promise<boolean> },
-  retries = 4,
-  delay = 800,
-): Promise<boolean> {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const result = await actor.isCallerAdmin();
-      if (result) return true;
-    } catch {
-      // ignore and retry
-    }
-    if (i < retries - 1) await sleep(delay);
-  }
-  return false;
-}
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { login, loginStatus, isLoggingIn, identity, clear } =
-    useInternetIdentity();
-  const { actor, isFetching: actorFetching } = useActor();
-  const {
-    data: isAdmin,
-    isLoading: isAdminLoading,
-    isFetching: isAdminFetching,
-  } = useIsAdmin();
-  const checkingAdmin = isAdminLoading || isAdminFetching;
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(false);
+  const [shake, setShake] = useState(false);
 
-  const [phase, setPhase] = useState<LoginPhase>("idle");
-  const claimingRef = useRef(false);
-  const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Stuck-screen guard: if verifying/checking/claiming takes too long, reset to error
-  useEffect(() => {
-    if (phase === "verifying" || phase === "checking" || phase === "claiming") {
-      stuckTimerRef.current = setTimeout(() => {
-        claimingRef.current = false;
-        setPhase("error");
-      }, 20000);
-    } else {
-      if (stuckTimerRef.current) {
-        clearTimeout(stuckTimerRef.current);
-        stuckTimerRef.current = null;
-      }
-    }
-    return () => {
-      if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
-    };
-  }, [phase]);
-
-  useEffect(() => {
-    if (!identity) {
-      setPhase("idle");
-      claimingRef.current = false;
-      return;
-    }
-    if (actorFetching || !actor) {
-      setPhase("verifying");
-      return;
-    }
-    if (checkingAdmin) {
-      setPhase("checking");
-      return;
-    }
-    // Already confirmed admin via query — go to dashboard
-    if (isAdmin === true) {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === "pazhampori") {
+      sessionStorage.setItem("adminLoggedIn", "true");
       navigate({ to: "/admin/dashboard" });
-      return;
+    } else {
+      setError(true);
+      setShake(true);
+      setPassword("");
+      setTimeout(() => setShake(false), 600);
     }
-    // isAdmin returned false — do a fresh direct check before claiming
-    if (isAdmin === false && !claimingRef.current) {
-      claimingRef.current = true;
-      setPhase("claiming");
-
-      (async () => {
-        // Step 1: fresh direct check — query cache may be stale
-        try {
-          const freshCheck = await actor.isCallerAdmin();
-          if (freshCheck) {
-            await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
-            navigate({ to: "/admin/dashboard" });
-            return;
-          }
-        } catch {
-          // ignore, proceed to claim
-        }
-
-        // Step 2: try to claim the first-admin slot
-        let claimSucceeded = false;
-        try {
-          claimSucceeded = await actor.claimFirstAdmin();
-        } catch {
-          // claim threw — fall through to retry
-        }
-
-        if (claimSucceeded) {
-          await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
-          navigate({ to: "/admin/dashboard" });
-          return;
-        }
-
-        // Step 3: claim failed or threw — retry isCallerAdmin up to 4 times
-        const confirmedAdmin = await retryIsAdmin(actor);
-        if (confirmedAdmin) {
-          await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
-          navigate({ to: "/admin/dashboard" });
-          return;
-        }
-
-        // Genuinely not admin
-        setPhase("denied");
-      })();
-    }
-  }, [
-    identity,
-    actorFetching,
-    actor,
-    checkingAdmin,
-    isAdmin,
-    navigate,
-    queryClient,
-  ]);
-
-  const isBusy =
-    isLoggingIn ||
-    phase === "verifying" ||
-    phase === "checking" ||
-    phase === "claiming";
-
-  const busyLabel =
-    phase === "verifying"
-      ? "Verifying..."
-      : phase === "checking"
-        ? "Checking access..."
-        : phase === "claiming"
-          ? "Setting up access..."
-          : "Signing in...";
-
-  const handleSignOut = async () => {
-    claimingRef.current = false;
-    setPhase("idle");
-    await clear();
-    await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
   };
-
-  const showError = phase === "denied" || phase === "error";
-  const showLoginError = loginStatus === "loginError" && !identity;
-  const showSignOutBtn =
-    showError || (loginStatus === "loginError" && !!identity);
 
   return (
     <div
@@ -223,7 +74,9 @@ export default function AdminLogin() {
           maxWidth: "28rem",
         }}
       >
-        <div
+        <motion.div
+          animate={shake ? { x: [-10, 10, -8, 8, -4, 4, 0] } : {}}
+          transition={{ duration: 0.5 }}
           style={{
             background: COLORS.cardBg,
             border: COLORS.cardBorder,
@@ -257,75 +110,82 @@ export default function AdminLogin() {
               Admin Access
             </h1>
             <p style={{ fontSize: "0.875rem", color: COLORS.bodyText }}>
-              Sign in to manage farewell photos &amp; videos
+              Enter the admin password to continue
             </p>
           </div>
 
-          {showLoginError && (
-            <div
-              data-ocid="login.error_state"
-              style={{
-                marginBottom: "1.5rem",
-                padding: "1rem",
-                background: COLORS.errorBg,
-                border: `1px solid ${COLORS.errorBorder}`,
-                borderRadius: "0.5rem",
-                color: COLORS.errorText,
-                fontSize: "0.875rem",
-              }}
-            >
-              Login failed. Please try again.
-            </div>
-          )}
-
-          {showError && (
-            <motion.div
-              data-ocid="login.error_state"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              style={{
-                marginBottom: "1.5rem",
-                padding: "1rem",
-                background: COLORS.errorBg,
-                border: `1px solid ${COLORS.errorBorder}`,
-                borderRadius: "0.5rem",
-                color: COLORS.errorText,
-                fontSize: "0.875rem",
-                display: "flex",
-                alignItems: "flex-start",
-                gap: "0.75rem",
-              }}
-            >
-              <ShieldX
+          <form
+            onSubmit={handleSubmit}
+            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+          >
+            <div style={{ position: "relative" }}>
+              <KeyRound
                 style={{
-                  width: "1.25rem",
-                  height: "1.25rem",
-                  marginTop: "0.125rem",
-                  flexShrink: 0,
+                  position: "absolute",
+                  left: "1rem",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  width: "1.125rem",
+                  height: "1.125rem",
+                  color: COLORS.mutedText,
+                  pointerEvents: "none",
                 }}
               />
-              <span>
-                {phase === "denied" ? (
-                  <>
-                    <strong>Access denied.</strong> An admin is already
-                    registered. Contact the site admin for access.
-                  </>
-                ) : (
-                  <>
-                    <strong>Something went wrong.</strong> Please sign out and
-                    try again.
-                  </>
-                )}
-              </span>
-            </motion.div>
-          )}
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError(false);
+                }}
+                placeholder="Password"
+                style={{
+                  width: "100%",
+                  paddingLeft: "2.75rem",
+                  paddingRight: "1rem",
+                  paddingTop: "0.875rem",
+                  paddingBottom: "0.875rem",
+                  fontSize: "1rem",
+                  borderRadius: "0.75rem",
+                  border: `1.5px solid ${error ? COLORS.errorBorder : COLORS.inputBorder}`,
+                  background: "oklch(100% 0 0 / 0.7)",
+                  color: COLORS.headingAdmin,
+                  outline: "none",
+                  boxSizing: "border-box",
+                  transition: "border-color 0.2s",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = COLORS.inputFocus;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = error
+                    ? COLORS.errorBorder
+                    : COLORS.inputBorder;
+                }}
+              />
+            </div>
 
-          {!identity ? (
+            {error && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{
+                  fontSize: "0.875rem",
+                  color: COLORS.errorText,
+                  textAlign: "center",
+                  margin: 0,
+                  padding: "0.5rem 0.75rem",
+                  background: COLORS.errorBg,
+                  border: `1px solid ${COLORS.errorBorder}`,
+                  borderRadius: "0.5rem",
+                }}
+              >
+                Incorrect password. Please try again.
+              </motion.p>
+            )}
+
             <button
-              type="button"
-              data-ocid="login.primary_button"
-              onClick={login}
-              disabled={isBusy}
+              type="submit"
               style={{
                 width: "100%",
                 background: COLORS.btnBg,
@@ -335,77 +195,6 @@ export default function AdminLogin() {
                 padding: "1rem 1.5rem",
                 fontSize: "1rem",
                 fontWeight: 600,
-                cursor: isBusy ? "not-allowed" : "pointer",
-                opacity: isBusy ? 0.7 : 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "0.5rem",
-                transition: "opacity 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                if (!isBusy) e.currentTarget.style.opacity = "0.9";
-              }}
-              onMouseLeave={(e) => {
-                if (!isBusy) e.currentTarget.style.opacity = "1";
-              }}
-            >
-              {isLoggingIn ? (
-                <>
-                  <Loader2
-                    className="animate-spin"
-                    style={{ width: "1.25rem", height: "1.25rem" }}
-                  />
-                  Signing in...
-                </>
-              ) : (
-                <>
-                  <LogIn style={{ width: "1.25rem", height: "1.25rem" }} />
-                  Sign In
-                </>
-              )}
-            </button>
-          ) : isBusy ? (
-            <div
-              data-ocid="login.loading_state"
-              style={{
-                width: "100%",
-                background: COLORS.btnBg,
-                color: COLORS.btnText,
-                borderRadius: "0.75rem",
-                padding: "1rem 1.5rem",
-                fontSize: "1rem",
-                fontWeight: 600,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "0.5rem",
-                opacity: 0.8,
-              }}
-            >
-              <Loader2
-                className="animate-spin"
-                style={{ width: "1.25rem", height: "1.25rem" }}
-              />
-              {busyLabel}
-            </div>
-          ) : null}
-
-          {showSignOutBtn && (
-            <button
-              type="button"
-              data-ocid="login.secondary_button"
-              onClick={handleSignOut}
-              style={{
-                width: "100%",
-                marginTop: "0.75rem",
-                background: "transparent",
-                border: `1px solid ${COLORS.outlineBorder}`,
-                borderRadius: "0.75rem",
-                padding: "0.75rem 1.5rem",
-                fontSize: "0.9375rem",
-                fontWeight: 500,
-                color: COLORS.outlineText,
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -414,30 +203,17 @@ export default function AdminLogin() {
                 transition: "opacity 0.2s",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = "0.75";
+                e.currentTarget.style.opacity = "0.85";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.opacity = "1";
               }}
             >
-              <LogOut style={{ width: "1rem", height: "1rem" }} />
-              Sign Out &amp; Try Again
+              <LogIn style={{ width: "1.25rem", height: "1.25rem" }} />
+              Enter Dashboard
             </button>
-          )}
-
-          <p
-            style={{
-              marginTop: "1.5rem",
-              textAlign: "center",
-              fontSize: "0.75rem",
-              color: COLORS.mutedText,
-            }}
-          >
-            {phase === "denied"
-              ? "Only the registered admin can access the dashboard."
-              : "The first person to sign in will become the admin."}
-          </p>
-        </div>
+          </form>
+        </motion.div>
       </motion.div>
     </div>
   );
