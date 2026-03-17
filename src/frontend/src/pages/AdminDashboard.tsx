@@ -68,13 +68,19 @@ function UploadButton({
   const [progress, setProgress] = useState<number | null>(null);
 
   const inputId = `file-input-${mediaType}-${group}`;
-  const isDisabled = addMedia.isPending || !group || !actor;
+  // Never disable the input itself -- disabled inputs won't open on mobile browsers.
+  // Instead we guard inside handleFile.
+  const isUploading = addMedia.isPending;
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!group) {
       toast.error("Please select a group first.");
+      return;
+    }
+    if (!actor) {
+      toast.error("Please wait a moment and try again.");
       return;
     }
     const title = file.name.replace(/\.[^.]+$/, "");
@@ -100,6 +106,7 @@ function UploadButton({
 
   return (
     <div className="flex flex-col gap-2">
+      {/* input is NEVER disabled so the native file picker always opens on mobile */}
       <input
         ref={fileRef}
         id={inputId}
@@ -107,22 +114,21 @@ function UploadButton({
         accept={accept}
         className="sr-only"
         onChange={handleFile}
-        disabled={isDisabled}
       />
       <label
         htmlFor={inputId}
         data-ocid={ocid}
         className="flex items-center gap-2 font-body font-semibold px-6 py-5 rounded-xl cursor-pointer select-none"
         style={{
-          background: isDisabled
+          background: isUploading
             ? "oklch(70% 0.07 148)"
             : "oklch(52% 0.13 148)",
           color: "white",
-          opacity: isDisabled ? 0.6 : 1,
-          pointerEvents: isDisabled ? "none" : "auto",
+          opacity: isUploading ? 0.7 : 1,
+          pointerEvents: isUploading ? "none" : "auto",
         }}
       >
-        {addMedia.isPending && progress !== null ? (
+        {isUploading && progress !== null ? (
           <Loader2 className="w-5 h-5 animate-spin" />
         ) : (
           <Icon className="w-5 h-5" />

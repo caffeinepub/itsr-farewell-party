@@ -1,15 +1,7 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useParams } from "@tanstack/react-router";
-import {
-  ArrowLeft,
-  Camera,
-  Download,
-  Film,
-  Play,
-  Volume2,
-  X,
-} from "lucide-react";
+import { ArrowLeft, Camera, Film, Play, Volume2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MediaType } from "../backend";
@@ -31,42 +23,6 @@ const SPINNER_CSS = "@keyframes spin { to { transform: rotate(360deg); } }";
 
 const INITIAL_LOAD_TIMEOUT_MS = 25000;
 const STALL_TIMEOUT_MS = 30000;
-
-// ─── Instagram SVG Icon ───────────────────────────────────────────────────────
-
-function InstagramIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <rect
-        x="2"
-        y="2"
-        width="20"
-        height="20"
-        rx="5"
-        ry="5"
-        stroke="currentColor"
-        strokeWidth="2"
-        fill="none"
-      />
-      <circle
-        cx="12"
-        cy="12"
-        r="4"
-        stroke="currentColor"
-        strokeWidth="2"
-        fill="none"
-      />
-      <circle cx="17.5" cy="6.5" r="1" fill="currentColor" />
-    </svg>
-  );
-}
 
 // ─── Fullscreen Intro Video ───────────────────────────────────────────────────
 
@@ -328,90 +284,6 @@ function IntroVideo({
   );
 }
 
-// ─── Instagram Download Button ───────────────────────────────────────────────
-
-function InstaDownloadButton({
-  videoUrl,
-  label,
-}: { videoUrl: string; label: string }) {
-  const handleDownload = () => {
-    const a = document.createElement("a");
-    a.href = videoUrl;
-    a.download = `${label}-intro.mp4`;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  return (
-    <motion.button
-      type="button"
-      data-ocid="insta.download_button"
-      onClick={handleDownload}
-      initial={{ opacity: 0, x: 40 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.5, delay: 0.3 }}
-      whileHover={{ scale: 1.04 }}
-      whileTap={{ scale: 0.97 }}
-      className="fixed right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-2 px-3 py-4 rounded-2xl shadow-lg"
-      style={{
-        background:
-          "linear-gradient(135deg, oklch(100% 0 0 / 0.95), oklch(96% 0.015 148 / 0.95))",
-        border: "1.5px solid oklch(72% 0.12 148 / 0.4)",
-        boxShadow:
-          "0 4px 24px oklch(55% 0.1 148 / 0.18), 0 0 40px oklch(65% 0.12 148 / 0.1)",
-        backdropFilter: "blur(12px)",
-        maxWidth: "80px",
-        writingMode: "vertical-rl" as const,
-        cursor: "pointer",
-      }}
-    >
-      {/* Icons row */}
-      <div
-        style={{
-          writingMode: "horizontal-tb",
-          display: "flex",
-          gap: "6px",
-          alignItems: "center",
-        }}
-      >
-        <span
-          style={{
-            background:
-              "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-            display: "inline-flex",
-          }}
-        >
-          <InstagramIcon size={15} />
-        </span>
-        <Download
-          style={{ width: 13, height: 13, color: "oklch(42% 0.13 148)" }}
-        />
-      </div>
-
-      {/* Label — rotated text */}
-      <span
-        style={{
-          fontSize: "0.6rem",
-          fontWeight: 600,
-          color: "oklch(32% 0.08 148)",
-          letterSpacing: "0.02em",
-          writingMode: "vertical-rl",
-          textOrientation: "mixed",
-          lineHeight: 1.3,
-        }}
-      >
-        tap to download the intro video for instagram stories
-      </span>
-    </motion.button>
-  );
-}
-
 // ─── Half-Screen Viewer ──────────────────────────────────────────────────────
 
 function HalfScreenViewer({
@@ -526,9 +398,10 @@ function FloatingItem({ media, index, onClick }: FloatingItemProps) {
       onClick={onClick}
       className="absolute cursor-pointer rounded-2xl overflow-hidden"
       style={{
-        left: `${left}%`,
+        left: `min(${left}%, calc(100% - ${size}px - 8px))`,
         top: `${top}px`,
         width: `${size}px`,
+        maxWidth: "calc(100% - 16px)",
         height: `${size}px`,
         border: "1.5px solid oklch(72% 0.14 148 / 0.4)",
         boxShadow:
@@ -881,9 +754,6 @@ export default function GroupPage() {
     setIntroDoneGroups((prev) => new Set([...prev, groupId]));
   const showIntro = !!introVideo && !!introVideoUrl && !introDone && !isLoading;
 
-  // Show the download button only after the intro is done and there's an intro video
-  const showDownloadBtn = introDone && !!introVideoUrl && isFloatingGroup;
-
   return (
     <div
       className="min-h-screen grain-overlay"
@@ -894,11 +764,6 @@ export default function GroupPage() {
     >
       {/* Fullscreen intro for floating groups */}
       {showIntro && <IntroVideo video={introVideo} onDone={markIntroDone} />}
-
-      {/* Instagram download floating button */}
-      {showDownloadBtn && (
-        <InstaDownloadButton videoUrl={introVideoUrl} label={meta.label} />
-      )}
 
       {/* Background orbs */}
       <div

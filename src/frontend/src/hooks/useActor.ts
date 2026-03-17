@@ -16,14 +16,15 @@ export function useActor() {
       const isAuthenticated = !!identity;
 
       if (!isAuthenticated) {
-        // Return anonymous actor -- try to initialize with admin token if available
+        // Anonymous actor -- still initialize with admin token if present
+        // so that _caffeineStorageCreateCertificate works for uploads
         const actor = await createActorWithConfig();
-        // Always attempt initialization so that blob-storage certificate
-        // creation works for the passphrase-based admin session.
-        try {
-          await actor._initializeAccessControlWithSecret(adminToken);
-        } catch (e) {
-          console.warn("[useActor] Access control init skipped:", e);
+        if (adminToken) {
+          try {
+            await actor._initializeAccessControlWithSecret(adminToken);
+          } catch {
+            // ignore -- non-critical for public browsing
+          }
         }
         return actor;
       }
@@ -40,7 +41,6 @@ export function useActor() {
     },
     // Only refetch when identity changes
     staleTime: Number.POSITIVE_INFINITY,
-    // This will cause the actor to be recreated when the identity changes
     enabled: true,
   });
 
