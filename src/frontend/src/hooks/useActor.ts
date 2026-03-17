@@ -12,11 +12,20 @@ export function useActor() {
   const actorQuery = useQuery<backendInterface>({
     queryKey: [ACTOR_QUERY_KEY, identity?.getPrincipal().toString()],
     queryFn: async () => {
+      const adminToken = getSecretParameter("caffeineAdminToken") || "";
       const isAuthenticated = !!identity;
 
       if (!isAuthenticated) {
-        // Return anonymous actor if not authenticated
-        return await createActorWithConfig();
+        // Return anonymous actor -- try to initialize with admin token if available
+        const actor = await createActorWithConfig();
+        // Always attempt initialization so that blob-storage certificate
+        // creation works for the passphrase-based admin session.
+        try {
+          await actor._initializeAccessControlWithSecret(adminToken);
+        } catch (e) {
+          console.warn("[useActor] Access control init skipped:", e);
+        }
+        return actor;
       }
 
       const actorOptions = {
@@ -26,7 +35,6 @@ export function useActor() {
       };
 
       const actor = await createActorWithConfig(actorOptions);
-      const adminToken = getSecretParameter("caffeineAdminToken") || "";
       await actor._initializeAccessControlWithSecret(adminToken);
       return actor;
     },

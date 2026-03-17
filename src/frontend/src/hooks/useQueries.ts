@@ -29,10 +29,17 @@ export function useListMedia() {
     queryKey: ["media"],
     queryFn: async () => {
       if (!actor) return [];
-      const items = await actor.listMedia();
-      // Pre-cache all media in background once online
-      precacheMediaUrls(items);
-      return items;
+      try {
+        const items = await actor.listMedia();
+        // Pre-cache all media in background once online
+        precacheMediaUrls(items);
+        return items;
+      } catch (err) {
+        console.error("[useListMedia] Failed to fetch media:", err);
+        // Return empty array instead of crashing the UI -- bad entries
+        // (e.g. from a previous failed upload) won't break the dashboard.
+        return [];
+      }
     },
     enabled: !!actor && !isFetching,
   });
